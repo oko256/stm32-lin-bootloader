@@ -3,6 +3,7 @@
 
   update   The host is the bus commander and updates a RESPONDER role bootloader.
   serve    The host is a provider (responder) for a COMMANDER role bootloader.
+  update-nodes  Like update, for several RESPONDER role bootloaders on the bus at once.
   status   Reads the STATUS of a RESPONDER role bootloader once.
 
 The frame IDs default to the defaults of the bootloader's CMake options.
@@ -15,7 +16,7 @@ from pathlib import Path
 import protocol as p
 from bus import CardCommanderBus, CardResponderBus
 from provider import CommanderIds, Provider
-from updater import ResponderIds, UpdateError, Updater
+from updater import Node, ResponderIds, UpdateError, Updater, update_nodes
 from usblincard import UsbLinCard
 
 
@@ -79,6 +80,32 @@ def cmd_update(args, card: UsbLinCard) -> int:
     return 0
 
 
+def _node(text: str) -> Node:
+    """Parses "STATUS_ID,CMD_ID,DATA_ID,IMAGE,VERSION[,force]"."""
+    parts = text.split(",")
+    if len(parts) not in (5, 6) or (len(parts) == 6 and parts[5] != "force"):
+        raise argparse.ArgumentTypeError(f"expected STATUS_ID,CMD_ID,DATA_ID,IMAGE,VERSION[,force], got {text!r}")
+    ids = ResponderIds(int(parts[0], 0), int(parts[1], 0), int(parts[2], 0))
+    return Node(ids, _read_image(Path(parts[3])), p.parse_version(parts[4]), force=len(parts) == 6)
+
+
+def cmd_update_nodes(args, card: UsbLinCard) -> int:
+    bus = CardCommanderBus(card, args.baud, args.classic_checksum)
+    console = _Console()
+    ids = ", ".join(f"0x{n.ids.status:02X}" for n in args.node)
+    print(f"Waiting for the bootloaders (STATUS {ids}) for {args.wait} s: reset the devices now")
+    try:
+        outcomes = update_nodes(
+            bus, args.node, wait_timeout=args.wait, attempts=args.attempts, log=console.log, progress=console.progress
+        )
+    except UpdateError as e:
+        print(f"Update failed: {e}", file=sys.stderr)
+        return 1
+    for node, outcome in zip(args.node, outcomes):
+        console.log(f"STATUS 0x{node.ids.status:02X} Result: {outcome.value}")
+    return 0
+
+
 def cmd_serve(args, card: UsbLinCard) -> int:
     image = _read_image(args.image)
     bus = CardResponderBus(card, args.baud, args.classic_checksum)
@@ -138,6 +165,18 @@ def main(argv=None) -> int:
     sp.add_argument("--attempts", type=int, default=3, help="update attempts (default: %(default)s)")
     sp.add_argument("--no-boot", action="store_true", help="don't send BOOT at the end")
     sp.set_defaults(func=cmd_update)
+
+    sp = sub.add_parser("update-nodes", help="update several RESPONDER role bootloaders (the host is the commander)")
+    sp.add_argument(
+        "--node",
+        type=_node,
+        action="append",
+        required=True,
+        help="STATUS_ID,CMD_ID,DATA_ID,IMAGE,VERSION[,force] of one node (repeat for each, updated in this order)",
+    )
+    sp.add_argument("--wait", type=float, default=60.0, help="how long to wait for all the bootloaders (s)")
+    sp.add_argument("--attempts", type=int, default=3, help="update attempts per node (default: %(default)s)")
+    sp.set_defaults(func=cmd_update_nodes)
 
     sp = sub.add_parser("serve", help="provide an update for a COMMANDER role bootloader")
     add_image_args(sp)

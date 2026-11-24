@@ -107,9 +107,18 @@ tools/linboot/linboot.py -p /dev/ttyACM0 update build/<preset>/examples/blinky/b
 tools/linboot/linboot.py -p /dev/ttyACM0 update app.bin --version 1.1 --force   # reinstall the same version
 tools/linboot/linboot.py -p /dev/ttyACM0 status                                 # read the STATUS once
 
+# Several RESPONDER nodes: all are caught in their bootloaders first, then updated in this order.
+tools/linboot/linboot.py -p /dev/ttyACM0 update-nodes \
+    --node 0x30,0x31,0x32,app1.bin,1.1 --node 0x20,0x21,0x22,app2.bin,2.0,force
+
+
 # COMMANDER role: the PC is provider 0. Start this, then reset the device.
 tools/linboot/linboot.py -p /dev/ttyACM0 serve app.bin --version 1.1 --index 0
 ```
+
+With several nodes, the nodes waiting for their turn have their heartbeat (STATUS) polled every
+second, so that they stay in their bootloaders instead of starting their applications after the
+session timeout. A real commander updating several nodes must do the same.
 
 The card needs the LIN bus supply (V+), and the commander side (the card or the device) needs its
 MASTER pull-up jumper fitted. With the stock card firmware, the transfer is slower than the bus
@@ -321,6 +330,8 @@ FLASH (rx) : ORIGIN = 0x08001000, LENGTH = 27K
 
 `examples/blinky` is a minimal application: it blinks an LED from the SysTick interrupt (which also
 shows that the vector table relocation works), at 1 Hz (`blinky-slow`) or 5 Hz (`blinky-fast`).
+`blinky-reboot` blinks fast and resets the device after 3 s, so that a device without any other
+way to reset it keeps coming back to its bootloader (used for testing).
 The LED pin is `BLINKY_LED_PIN` (PA7 on the USB LIN Card).
 
 # Developer notes
@@ -431,6 +442,20 @@ version among two providers (both played by the adapter). With a second adapter
 (`--adapter2`/`LINBOOT_ADAPTER2`; skipped without one), `test_commander_multi.py` has two real
 providers: the choice by version, index and FORCE, and falling back to the other provider when the
 chosen one disappears mid-transfer or serves a corrupt image.
+
+`test_responder_multi.py` has two RESPONDER DUTs on the bus (skipped if the second one doesn't
+answer), updated with `update_nodes()` and the `update-nodes` CLI: both updated, one of them up to
+date, and (slow) the waiting node kept in its bootloader during a 40 s update of the other one
+(checked over SWD on the first DUT). The second DUT has no SWD:
+
+- It's a USB LIN Card flashed with the bootloader of the `usb-lin-card-responder-node2-release`
+  preset (IDs 0x20..0x22) over USB DFU: send `boot` to the card's serial port, then
+  `STM32_Programmer_CLI -c port=usb1 -e all -w build/usb-lin-card-responder-node2-release/linboot.elf -v -g`.
+  Entering DFU left the option bytes booting DFU; the bootloader fixes them when it first runs
+  (`LINBOOT_STM32F0_FORCE_FLASH_BOOT`).
+- It can't be reset, so the tests always install `blinky-reboot` on it, and check its firmware
+  version from its STATUS when it comes back to its bootloader.
+- To make it a USB LIN Card again, flash the usb-lin-card-fw over SWD.
 
 Useful manual SWD commands: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -hardRst` (reset),
 `-r32 0x08007C00 24` (metadata), `-r32 0x40010000 4` (`MEM_MODE`).
