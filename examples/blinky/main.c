@@ -1,6 +1,7 @@
 /**
  * @file
- * @brief Blinky example application: toggles an LED every BLINKY_HALF_PERIOD_MS from SysTick.
+ * @brief Blinky example application: toggles an LED every BLINKY_HALF_PERIOD_MS from SysTick, and
+ * resets the device after BLINKY_RESET_AFTER_MS (if non-zero).
  *
  * Runs on the reset clock (HSI, 8 MHz), which the bootloader restores before starting the
  * application.
@@ -38,6 +39,11 @@ int main(void)
     bool     on      = false;
     uint32_t last_ms = 0;
     for (;;) {
+#if BLINKY_RESET_AFTER_MS > 0
+        if (s_tick_ms >= BLINKY_RESET_AFTER_MS) {
+            NVIC_SystemReset();
+        }
+#endif
         if (s_tick_ms - last_ms >= BLINKY_HALF_PERIOD_MS) {
             last_ms += BLINKY_HALF_PERIOD_MS;
             on = !on;

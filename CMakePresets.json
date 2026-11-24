@@ -57,6 +57,18 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "LINBOOT_ROLE": "COMMANDER"
             }
+        },
+        {
+            "name": "usb-lin-card-responder-node2-release",
+            "displayName": "USB LIN Card, RESPONDER role, second node (IDs 0x20..0x22), Release",
+            "inherits": "usb-lin-card",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "LINBOOT_ROLE": "RESPONDER",
+                "LINBOOT_ID_STATUS": "0x20",
+                "LINBOOT_ID_CMD": "0x21",
+                "LINBOOT_ID_DATA": "0x22"
+            }
         }
     ],
     "buildPresets": [
@@ -75,6 +87,10 @@
         {
             "name": "usb-lin-card-commander-release",
             "configurePreset": "usb-lin-card-commander-release"
+        },
+        {
+            "name": "usb-lin-card-responder-node2-release",
+            "configurePreset": "usb-lin-card-responder-node2-release"
         }
     ]
 }

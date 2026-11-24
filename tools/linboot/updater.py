@@ -39,7 +39,12 @@ class Updater:
         stall_timeout: float = 3.0,
         log: Callable[[str], None] = print,
         progress: Callable[[int, int], None] | None = None,
+        keep_alive: list[int] | None = None,
+        keep_alive_interval: float = 1.0,
     ):
+        """@p keep_alive: STATUS IDs of other bootloaders whose heartbeat is polled every
+        @p keep_alive_interval meanwhile, so that they stay in their bootloaders (waiting for their
+        turn) instead of starting their applications after the session timeout."""
         self.bus = bus
         self.ids = ids
         self.attempts = attempts
@@ -47,10 +52,24 @@ class Updater:
         self.stall_timeout = stall_timeout
         self.log = log
         self.progress = progress
+        self.keep_alive = keep_alive or []
+        self.keep_alive_interval = keep_alive_interval
+        self._last_keep_alive: float | None = None
 
     def read_status(self, timeout: float | None = None) -> p.Status | None:
         data = self.bus.request(self.ids.status, p.FRAME_SIZE, self.status_timeout if timeout is None else timeout)
+        self._poll_keep_alive()
         return None if data is None else p.Status.decode(data)
+
+    def _poll_keep_alive(self) -> None:
+        if not self.keep_alive:
+            return
+        now = self.bus.time()
+        if self._last_keep_alive is not None and now - self._last_keep_alive < self.keep_alive_interval:
+            return
+        self._last_keep_alive = now
+        for status_id in self.keep_alive:
+            self.bus.request(status_id, p.FRAME_SIZE, self.status_timeout)
 
     def _status_until(self, timeout: float) -> p.Status:
         """Polls STATUS until there is a response (the bootloader doesn't respond while it's busy
@@ -154,3 +173,65 @@ class Updater:
             if status.state == p.State.RECEIVING:
                 # FINISH was lost on the bus (all the data is in: it was only sent after that).
                 self.send_cmd(p.cmd_finish(p.crc32(image)))
+
+
+@dataclass
+class Node:
+    """One RESPONDER role bootloader to update with update_nodes()."""
+
+    ids: ResponderIds
+    image: bytes
+    version: int
+    force: bool = False
+    device_type: int | None = None
+    hardware_version: int | None = None
+
+
+def update_nodes(
+    bus: CommanderBus,
+    nodes: list[Node],
+    wait_timeout: float = 60.0,
+    attempts: int = 3,
+    log: Callable[[str], None] = print,
+    progress: Callable[[int, int], None] | None = None,
+) -> list[Outcome]:
+    """Updates several RESPONDER role bootloaders on the bus, one after the other.
+
+    The bootloaders respond only for a while after a reset, so first all of them are caught: their
+    heartbeats are polled until each one has responded (the nodes found keep being polled, which
+    keeps them in their bootloaders). Then they are updated in order, polling the heartbeats of the
+    ones still waiting for their turn."""
+    found: set[int] = set()
+    deadline = bus.time() + wait_timeout
+    while len(found) < len(nodes):
+        for i, node in enumerate(nodes):
+            data = bus.request(node.ids.status, p.FRAME_SIZE, 0.1)
+            if data is not None and i not in found:
+                found.add(i)
+                log(f"Bootloader at STATUS 0x{node.ids.status:02X}: {p.Status.decode(data).describe()}")
+        if len(found) < len(nodes) and bus.time() >= deadline:
+            missing = [f"0x{n.ids.status:02X}" for i, n in enumerate(nodes) if i not in found]
+            raise UpdateError(f"no STATUS response from {', '.join(missing)} within {wait_timeout} s")
+
+    outcomes = []
+    for i, node in enumerate(nodes):
+        log(f"Updating the node at STATUS 0x{node.ids.status:02X}")
+        updater = Updater(
+            bus,
+            node.ids,
+            attempts=attempts,
+            log=log,
+            progress=progress,
+            keep_alive=[n.ids.status for n in nodes[i + 1 :]],
+        )
+        outcomes.append(
+            updater.update(
+                node.image,
+                node.version,
+                force=node.force,
+                wait_timeout=5.0,
+                device_type=node.device_type,
+                hardware_version=node.hardware_version,
+            )
+        )
+    return outcomes
