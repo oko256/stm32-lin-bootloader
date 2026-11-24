@@ -13,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/coverage.cmake)
 
-# Sanitizers for everything, including minlin.
+# Sanitizers for everything.
 set(SANITIZER_FLAGS -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
 add_compile_options(${SANITIZER_FLAGS})
 add_link_options(${SANITIZER_FLAGS})
@@ -26,10 +26,6 @@ FetchContent_Declare(unity
 set(FETCHCONTENT_UPDATES_DISCONNECTED_unity ON)
 FetchContent_MakeAvailable(unity)
 
-# Build the real minlin library for the host.
-set(minlin_HARDENING OFF)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../minlin ${CMAKE_CURRENT_BINARY_DIR}/minlin)
-
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH FW_DIR)
 set(SRC ${FW_DIR}/src)
 set(CORE ${SRC}/core)
@@ -41,7 +37,7 @@ function(add_core_test name)
     add_executable(${name} ${ARGN} stubs/fake_flash.c)
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stubs ${SRC} ${CORE})
     target_compile_options(${name} PRIVATE -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Werror)
-    target_link_libraries(${name} PRIVATE unity::framework minlin::minlin)
+    target_link_libraries(${name} PRIVATE unity::framework)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -68,5 +64,5 @@ if(Python3_FOUND)
     set_tests_properties(test_host_tool PROPERTIES ENVIRONMENT "LINBOOT_SIM_LIB=$<TARGET_FILE:linboot_sim>")
 endif()
 
-# Only the bootloader's own sources: minlin has its own tests and reports.
+# Only the bootloader core: the glue to minlin and the port need the hardware.
 coverage_add_target(INCLUDE ${CORE})

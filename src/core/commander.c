@@ -28,8 +28,6 @@ static void s_send_result(linboot_commander* self, proto_error error)
     self->phase        = LINBOOT_COMMANDER_RESULT;
 }
 
-static void s_fail(linboot_commander* self, proto_error error) { s_send_result(self, error); }
-
 /// Chooses an offer: the first one with FORCE, otherwise the highest version (the first of equal
 /// ones). Returns the provider index, or -1 if there's no offer.
 static int s_choose_offer(const linboot_commander* self)
@@ -79,26 +77,8 @@ static linboot_action s_evaluate_offers(linboot_commander* self, uint32_t now_ms
     self->read_chunk   = NO_READ_CHUNK;
     self->poll_retries = 0;
     self->read_retries = 0;
-    self->result       = PROTO_ERR_NONE;
     self->phase        = LINBOOT_COMMANDER_READ;
     return LINBOOT_ACTION_NONE;
-}
-
-/// Commits the buffered image data to flash if needed. Returns false on failure.
-static bool s_commit(linboot_commander* self)
-{
-    // The last block may need two commits (block plus spill).
-    while (image_commit_needed(&self->image)) {
-        const bool ok = image_commit(&self->image);
-        if (self->image.meta_erased) {
-            self->identity.app_valid        = false;
-            self->identity.firmware_version = 0;
-        }
-        if (!ok) {
-            return false;
-        }
-    }
-    return true;
 }
 
 /// All chunks have been received: verify and record the new image.
@@ -107,9 +87,9 @@ static void s_finish_transfer(linboot_commander* self)
     const uint32_t expected_crc = proto_get_u32(self->trailer);
     const uint32_t crc          = image_flash_crc(&self->image);
     if (crc != expected_crc) {
-        s_fail(self, PROTO_ERR_CRC);
+        s_send_result(self, PROTO_ERR_CRC);
     } else if (!meta_write(self->image.layout->meta_addr, self->version, self->image.size, crc)) {
-        s_fail(self, PROTO_ERR_FLASH);
+        s_send_result(self, PROTO_ERR_FLASH);
     } else {
         self->identity.firmware_version = self->version;
         self->identity.app_valid        = true;
@@ -136,7 +116,7 @@ static bool s_accept_chunk(linboot_commander* self, const uint8_t* data)
         }
     }
     self->chunk++;
-    return s_commit(self);
+    return image_commit(&self->image);
 }
 
 /// Goes back to READ for the current chunk (resynchronizing the provider), or fails the attempt if
@@ -146,7 +126,7 @@ static void s_resync(linboot_commander* self)
     if (self->read_chunk == self->chunk) {
         self->read_retries++;
         if (self->read_retries > LINBOOT_READ_RETRIES) {
-            s_fail(self, PROTO_ERR_TIMEOUT);
+            s_send_result(self, PROTO_ERR_TIMEOUT);
             return;
         }
     }
@@ -157,7 +137,7 @@ static void s_data_done(linboot_commander* self, bool received)
 {
     if (received && self->rx[0] == (uint8_t)self->chunk) {
         if (!s_accept_chunk(self, &self->rx[1])) {
-            s_fail(self, PROTO_ERR_FLASH);
+            s_send_result(self, PROTO_ERR_FLASH);
             return;
         }
         self->poll_retries = 0;
@@ -263,7 +243,7 @@ void linboot_commander_init(
     memset(self, 0, sizeof(*self));
     self->identity = *identity;
     self->start_ms = now_ms;
-    image_init(&self->image, layout);
+    image_init(&self->image, layout, &self->identity);
     s_start_discovery(self);
 }
 
@@ -287,11 +267,7 @@ bool linboot_commander_on_publish(linboot_commander* self, uint8_t id, uint8_t* 
     switch (self->phase) {
     case LINBOOT_COMMANDER_IDENTIFY: {
         out_payload[0] = PROTO_QUERY_IDENTIFY;
-        proto_put_u16(&out_payload[1], self->identity.device_type);
-        proto_put_u16(&out_payload[3], self->identity.hardware_version);
-        proto_put_u16(&out_payload[5], self->identity.firmware_version);
-        out_payload[7] = (uint8_t)((PROTO_VERSION << PROTO_STATUS_FLAGS_VERSION_SHIFT)
-                                   | (self->identity.app_valid ? PROTO_STATUS_FLAG_APP_VALID : 0u));
+        proto_put_identity(&out_payload[1], &self->identity);
     } break;
     case LINBOOT_COMMANDER_READ: {
         out_payload[0] = PROTO_QUERY_READ;

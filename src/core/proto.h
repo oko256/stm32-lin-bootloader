@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "common.h"
 #include <stdint.h>
 
 /// Version of this protocol, reported in the STATUS flags (RESPONDER) and IDENTIFY (COMMANDER).
@@ -114,3 +115,14 @@ static inline uint32_t proto_get_u24(const uint8_t* src)
 
 /// Reads 4 little-endian bytes.
 static inline uint32_t proto_get_u32(const uint8_t* src) { return proto_get_u24(src) | ((uint32_t)src[3] << 24); }
+
+/// Writes the identity fields shared by the RESPONDER STATUS (IDLE/REJECTED) and the COMMANDER
+/// IDENTIFY: [device_type:2][hw_version:2][fw_version:2][flags] (7 bytes).
+static inline void proto_put_identity(uint8_t* dst, const linboot_identity* identity)
+{
+    proto_put_u16(&dst[0], identity->device_type);
+    proto_put_u16(&dst[2], identity->hardware_version);
+    proto_put_u16(&dst[4], identity->firmware_version);
+    dst[6] = (uint8_t)((PROTO_VERSION << PROTO_STATUS_FLAGS_VERSION_SHIFT)
+                       | (identity->app_valid ? PROTO_STATUS_FLAG_APP_VALID : 0u));
+}

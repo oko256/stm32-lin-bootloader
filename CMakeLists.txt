@@ -34,19 +34,7 @@ add_link_options(${LINBOOT_PORT_CPU_FLAGS})
 
 set(LINBOOT_GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 
-if(LINBOOT_CLASSIC_CHECKSUM)
-    set(LINBOOT_CLASSIC_CHECKSUM_C 1)
-else()
-    set(LINBOOT_CLASSIC_CHECKSUM_C 0)
-endif()
-if(LINBOOT_VERIFY_APP_ON_BOOT)
-    set(LINBOOT_VERIFY_APP_ON_BOOT_C 1)
-else()
-    set(LINBOOT_VERIFY_APP_ON_BOOT_C 0)
-endif()
 configure_file(src/linboot_config.h.in ${LINBOOT_GENERATED_DIR}/linboot_config.h)
-
-set(LINBOOT_STACK_SIZE "0x400" CACHE STRING "Minimum stack size of the bootloader (checked by the linker)")
 
 # linboot_generate_linker_script(<output> <kind> <flash origin> <flash length> <ram origin>
 #                                <ram length> <stack size>)
@@ -125,7 +113,6 @@ linboot_port_setup_target(linboot)
 target_include_directories(linboot PRIVATE
     src
     src/core
-    src/hooks
     ${LINBOOT_GENERATED_DIR}
     ${LINBOOT_EXTRA_INCLUDE_DIRS}
 )

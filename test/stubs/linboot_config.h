@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#define LINBOOT_ROLE_TEST          1
 #define LINBOOT_DEVICE_TYPE        ((uint16_t)0x1234u)
 #define LINBOOT_HW_VERSION_DEFAULT ((uint16_t)0x0003u)
 

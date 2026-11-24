@@ -90,10 +90,9 @@ void linboot_responder_init(
     memset(self, 0, sizeof(*self));
     self->identity         = *identity;
     self->state            = PROTO_STATE_IDLE;
-    self->error            = PROTO_ERR_NONE;
     self->start_ms         = now_ms;
     self->last_activity_ms = now_ms;
-    image_init(&self->image, layout);
+    image_init(&self->image, layout, &self->identity);
 }
 
 void linboot_responder_on_frame(linboot_responder* self, uint8_t id, const uint8_t* payload, uint32_t now_ms)
@@ -122,11 +121,7 @@ bool linboot_responder_on_publish(linboot_responder* self, uint8_t id, uint8_t* 
     switch (self->state) {
     case PROTO_STATE_IDLE:
     case PROTO_STATE_REJECTED: {
-        proto_put_u16(&out_payload[1], self->identity.device_type);
-        proto_put_u16(&out_payload[3], self->identity.hardware_version);
-        proto_put_u16(&out_payload[5], self->identity.firmware_version);
-        out_payload[7] = (uint8_t)((PROTO_VERSION << PROTO_STATUS_FLAGS_VERSION_SHIFT)
-                                   | (self->identity.app_valid ? PROTO_STATUS_FLAG_APP_VALID : 0u));
+        proto_put_identity(&out_payload[1], &self->identity);
     } break;
     case PROTO_STATE_RECEIVING:
     case PROTO_STATE_VERIFYING: {
@@ -151,13 +146,7 @@ static void s_do_flash_work(linboot_responder* self, uint32_t now_ms)
     // FINISH may come right after the last chunk, so the last block may still be uncommitted when
     // verifying.
     if (transferring && image_commit_needed(&self->image)) {
-        const bool ok = image_commit(&self->image);
-        if (self->image.meta_erased) {
-            // The old application is being overwritten.
-            self->identity.app_valid        = false;
-            self->identity.firmware_version = 0;
-        }
-        if (!ok) {
+        if (!image_commit(&self->image)) {
             s_set_state(self, PROTO_STATE_FAILED, PROTO_ERR_FLASH);
         }
     } else if (self->state == PROTO_STATE_VERIFYING) {

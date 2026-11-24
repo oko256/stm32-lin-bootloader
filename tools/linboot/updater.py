@@ -151,10 +151,6 @@ class Updater:
             if status.state not in (p.State.RECEIVING, p.State.VERIFYING) or self.bus.time() > deadline:
                 self.log(f"Unexpected state after FINISH: {status.describe()}")
                 return None
-            if status.state == p.State.RECEIVING and status.error == p.Error.BAD_STATE:
-                # FINISH came before the last chunk got in: some chunks were lost after all.
-                self.log("FINISH was too early, retrying")
-                return None
             if status.state == p.State.RECEIVING:
-                # FINISH was lost on the bus.
+                # FINISH was lost on the bus (all the data is in: it was only sent after that).
                 self.send_cmd(p.cmd_finish(p.crc32(image)))

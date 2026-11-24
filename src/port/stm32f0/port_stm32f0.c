@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief STM32F0 port: clocks, tick, option bytes and starting the application.
+ * @brief STM32F0 port: clocks, tick, watchdog, GPIO and starting the application.
  *
  * SPDX-License-Identifier: MIT
  * Copyright 2026 Olli Kokko <https://github.com/oko256/stm32-lin-bootloader>

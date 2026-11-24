@@ -11,14 +11,11 @@
 /// Erased flash value, used for padding the last block.
 #define ERASED_BYTE 0xFFu
 
-void image_init(image_writer* self, const linboot_layout* layout)
+void image_init(image_writer* self, const linboot_layout* layout, linboot_identity* identity)
 {
-    self->layout       = layout;
-    self->size         = 0;
-    self->received     = 0;
-    self->block_offset = 0;
-    self->fill         = 0;
-    self->meta_erased  = false;
+    memset(self, 0, sizeof(*self));
+    self->layout   = layout;
+    self->identity = identity;
 }
 
 bool image_begin(image_writer* self, uint32_t size)
@@ -64,18 +61,24 @@ bool image_commit_needed(const image_writer* self)
     return self->fill >= LINBOOT_BLOCK_SIZE || (self->received >= self->size && self->fill > 0);
 }
 
-bool image_commit(image_writer* self)
+/// Erases the metadata page, which invalidates the old application.
+static bool s_erase_meta(image_writer* self)
 {
-    if (!image_commit_needed(self)) {
+    if (self->meta_erased) {
         return true;
     }
-    if (!self->meta_erased) {
-        if (!port_flash_erase_page(self->layout->meta_addr)) {
-            return false;
-        }
-        self->meta_erased = true;
+    if (!port_flash_erase_page(self->layout->meta_addr)) {
+        return false;
     }
+    self->meta_erased                = true;
+    self->identity->app_valid        = false;
+    self->identity->firmware_version = 0;
+    return true;
+}
 
+/// Writes one block (or the last partial one) from the buffer.
+static bool s_commit_block(image_writer* self)
+{
     const uintptr_t addr = self->layout->app_addr + self->block_offset;
     if ((self->block_offset & (self->layout->page_size - 1u)) == 0 && !port_flash_erase_page(addr)) {
         return false;
@@ -96,6 +99,17 @@ bool image_commit(image_writer* self)
     }
     self->block_offset += LINBOOT_BLOCK_SIZE;
     self->fill = spill;
+    return true;
+}
+
+bool image_commit(image_writer* self)
+{
+    // At the end of the image, a full block may be followed by its spill as the last block.
+    while (image_commit_needed(self)) {
+        if (!s_erase_meta(self) || !s_commit_block(self)) {
+            return false;
+        }
+    }
     return true;
 }
 

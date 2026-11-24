@@ -107,6 +107,8 @@ set(LINBOOT_META_ADDR "" CACHE STRING
 set(LINBOOT_BLOCK_SIZE "" CACHE STRING
     "Size of the RAM write buffer (default: page size, or 1024 if the page is larger); must divide the page size")
 option(LINBOOT_VERIFY_APP_ON_BOOT "Verify the application CRC on every boot (not just the metadata record)" ON)
+set(LINBOOT_STACK_SIZE "0x400" CACHE STRING "Minimum stack size of the bootloader (checked by the linker)")
+linboot_check_uint(LINBOOT_STACK_SIZE 0x100 ${LINBOOT_RAM_SIZE})
 option(LINBOOT_MINIMAL_LIBC "Use minimal (small but slow) memcpy/memset/memmove instead of the C library ones" ON)
 
 linboot_check_uint(LINBOOT_BOOTLOADER_SIZE 1 ${LINBOOT_FLASH_SIZE})
@@ -196,6 +198,18 @@ foreach(i_id ${_ids})
         message(FATAL_ERROR "LIN frame ID ${i_id} is used more than once")
     endif()
     list(APPEND _seen ${_id_dec})
+endforeach()
+
+#--------------------------------------------------------------------------------------------------
+# Booleans for linboot_config.h
+#--------------------------------------------------------------------------------------------------
+
+foreach(i_var CLASSIC_CHECKSUM VERIFY_APP_ON_BOOT)
+    if(LINBOOT_${i_var})
+        set(LINBOOT_${i_var}_C 1)
+    else()
+        set(LINBOOT_${i_var}_C 0)
+    endif()
 endforeach()
 
 #--------------------------------------------------------------------------------------------------

@@ -9,7 +9,8 @@
  * excess ("spill") is kept for the next block.
  *
  * The metadata page is erased right before the first block is written, so the old application is
- * considered invalid only once it actually starts to get overwritten.
+ * considered invalid (in the identity given to image_init()) only once it actually starts to get
+ * overwritten.
  *
  * SPDX-License-Identifier: MIT
  * Copyright 2026 Olli Kokko <https://github.com/oko256/stm32-lin-bootloader>
@@ -25,6 +26,7 @@
 /// Image writer state.
 typedef struct {
     const linboot_layout* layout; ///< Where the image goes.
+    linboot_identity*     identity; ///< Invalidated when the old application is erased.
     uint32_t              size; ///< Size of the image being received.
     uint32_t              received; ///< Bytes received so far (the next expected offset).
     uint32_t              block_offset; ///< Image offset of the first byte in the buffer.
@@ -34,8 +36,9 @@ typedef struct {
     uint8_t               buf[LINBOOT_BLOCK_SIZE + PROTO_CHUNK_SIZE];
 } image_writer;
 
-/// Initializes the writer for @p layout (which must outlive the writer).
-void image_init(image_writer* self, const linboot_layout* layout);
+/// Initializes the writer for @p layout. When the old application starts to get overwritten,
+/// @p identity is updated to say that there's no valid application. Both must outlive the writer.
+void image_init(image_writer* self, const linboot_layout* layout, linboot_identity* identity);
 
 /// Starts receiving a new image of @p size bytes. Returns false (and doesn't start) if the size is
 /// zero or doesn't fit in the application area.
@@ -55,15 +58,10 @@ bool image_put(image_writer* self, const uint8_t* data, uint32_t len);
 /// Returns true if the buffer must be committed before more data can be accepted (or to finish).
 bool image_commit_needed(const image_writer* self);
 
-/// Writes the buffered block to the flash, erasing the metadata page first (if not yet erased) and
-/// the flash page when the block starts a new page. Returns false on a flash failure.
+/// Writes the buffered data to the flash (one block, or at the end of the image everything that's
+/// left), erasing the metadata page first (if not yet erased) and each flash page as a block starts
+/// it. Does nothing if no commit is needed. Returns false on a flash failure.
 bool image_commit(image_writer* self);
-
-/// Returns true when the whole image has been received and written.
-static inline bool image_complete(const image_writer* self)
-{
-    return self->size > 0 && self->received >= self->size && self->fill == 0;
-}
 
 /// Returns the CRC32 of the image as written in the flash.
 uint32_t image_flash_crc(const image_writer* self);
