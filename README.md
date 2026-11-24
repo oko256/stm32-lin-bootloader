@@ -376,7 +376,8 @@ cmake --preset coverage && cmake --build --preset coverage   # coverage report
 ```
 
 The core is built for the host with a test configuration (`test/stubs/linboot_config.h`: small
-pages and blocks), the simulated flash (`test/stubs/fake_flash.c`, with STM32F0 like programming
+pages and blocks; the geometry dependent tests also run with the block size equal to the page size
+and 64-bit flash writes, as `*_page_blocks`), the simulated flash (`test/stubs/fake_flash.c`, with STM32F0 like programming
 rules) and a simulated bus. The role tests play the other side of the bus, including lost frames,
 slow providers, flash failures and timeouts.
 

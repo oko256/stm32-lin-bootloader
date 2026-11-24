@@ -58,7 +58,19 @@ void test_put_before_begin_fails(void)
 
 void test_writes_image_of_various_sizes(void)
 {
-    const uint32_t sizes[] = {1, 2, 7, 127, 128, 129, 255, 256, 257, 1000, FAKE_APP_SIZE - 1, FAKE_APP_SIZE};
+    const uint32_t sizes[] = {
+        1,
+        2,
+        7,
+        LINBOOT_BLOCK_SIZE - 1,
+        LINBOOT_BLOCK_SIZE,
+        LINBOOT_BLOCK_SIZE + 1,
+        LINBOOT_FLASH_PAGE_SIZE - 1,
+        LINBOOT_FLASH_PAGE_SIZE,
+        LINBOOT_FLASH_PAGE_SIZE + 1,
+        1000,
+        FAKE_APP_SIZE - 1,
+        FAKE_APP_SIZE};
     for (uint32_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
         setUp();
         const uint32_t size = sizes[i];
@@ -84,22 +96,22 @@ void test_window_and_spill(void)
 {
     TEST_ASSERT_TRUE(image_begin(&s_writer, 1000));
     TEST_ASSERT_EQUAL_UINT32(LINBOOT_BLOCK_SIZE, image_window_end(&s_writer));
-    // 18 chunks = 126 bytes fit in the block, the 19th starts inside it and spills 5 bytes.
+    // The chunks up to FIRST_BLOCK_FULL_AT fit; the last of them starts inside the block and spills.
     uint8_t chunk[PROTO_CHUNK_SIZE];
-    for (uint32_t i = 0; i < 19; ++i) {
+    for (uint32_t i = 0; i < FIRST_BLOCK_FULL_AT / PROTO_CHUNK_SIZE; ++i) {
         memcpy(chunk, &s_image[i * PROTO_CHUNK_SIZE], PROTO_CHUNK_SIZE);
         TEST_ASSERT_TRUE(image_put(&s_writer, chunk, PROTO_CHUNK_SIZE));
     }
     TEST_ASSERT_TRUE(image_commit_needed(&s_writer));
-    TEST_ASSERT_EQUAL_UINT32(133, image_window_end(&s_writer)); // = received: full
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT, image_window_end(&s_writer)); // = received: full
     TEST_ASSERT_FALSE(image_put(&s_writer, chunk, PROTO_CHUNK_SIZE));
     TEST_ASSERT_EQUAL_UINT32(0, g_flash_program_count);
 
     TEST_ASSERT_TRUE(image_commit(&s_writer));
     TEST_ASSERT_EQUAL_HEX8_ARRAY(s_image, g_flash, LINBOOT_BLOCK_SIZE);
     TEST_ASSERT_EQUAL_UINT32(2 * LINBOOT_BLOCK_SIZE, image_window_end(&s_writer));
-    TEST_ASSERT_EQUAL_UINT32(133, image_received(&s_writer));
-    TEST_ASSERT_EQUAL_UINT32(5, s_writer.fill);
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT, image_received(&s_writer));
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT - LINBOOT_BLOCK_SIZE, s_writer.fill);
 }
 
 void test_meta_erased_only_on_first_commit(void)

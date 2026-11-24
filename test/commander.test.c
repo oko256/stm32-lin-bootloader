@@ -394,9 +394,9 @@ void test_flash_failure_is_reported(void)
 
 void test_metadata_write_failure_is_reported(void)
 {
-    // 300 bytes: 2 blocks of 128 bytes plus the last 44 bytes, then the metadata record.
+    // The image blocks are programmed first, then the metadata record.
     s_add_provider(0, 0x0200, 300);
-    g_flash_fail_program_in = 3;
+    g_flash_fail_program_in = (int32_t)BLOCKS_FOR(300);
     TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(60000));
     s_assert_installed(0x0200, 300);
     TEST_ASSERT_EQUAL_UINT32(2, s_providers[0].read_count);

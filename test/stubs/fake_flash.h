@@ -17,6 +17,13 @@
 #define FAKE_FLASH_SIZE  (FAKE_FLASH_PAGES * LINBOOT_FLASH_PAGE_SIZE)
 #define FAKE_APP_SIZE    (FAKE_APP_PAGES * LINBOOT_FLASH_PAGE_SIZE)
 
+/// Image offset where the first block is full: the first chunk boundary at or after the block size
+/// (the chunk that crosses the block boundary spills into the next block).
+#define FIRST_BLOCK_FULL_AT (((LINBOOT_BLOCK_SIZE + 7u - 1u) / 7u) * 7u)
+
+/// Number of blocks (flash program calls) an image of @p size bytes takes.
+#define BLOCKS_FOR(size) (((size) + LINBOOT_BLOCK_SIZE - 1u) / LINBOOT_BLOCK_SIZE)
+
 extern uint8_t  g_flash[FAKE_FLASH_SIZE];
 extern uint32_t g_flash_erase_count; ///< Page erases so far.
 extern uint32_t g_flash_program_count; ///< Program calls so far.

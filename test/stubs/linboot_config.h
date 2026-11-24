@@ -26,6 +26,14 @@
 #define LINBOOT_POLL_RETRIES       3u
 #define LINBOOT_READ_RETRIES       20u
 
-#define LINBOOT_FLASH_PAGE_SIZE   256u
+// The flash geometry can be overridden (test/CMakeLists.txt builds the tests also with the block
+// size equal to the page size, like on the STM32F042, and with 8-byte flash writes).
+#ifndef LINBOOT_FLASH_PAGE_SIZE
+#define LINBOOT_FLASH_PAGE_SIZE 256u
+#endif
+#ifndef LINBOOT_FLASH_WRITE_ALIGN
 #define LINBOOT_FLASH_WRITE_ALIGN 2u
-#define LINBOOT_BLOCK_SIZE        128u
+#endif
+#ifndef LINBOOT_BLOCK_SIZE
+#define LINBOOT_BLOCK_SIZE 128u
+#endif

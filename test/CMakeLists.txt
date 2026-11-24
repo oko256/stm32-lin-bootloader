@@ -32,21 +32,40 @@ set(CORE ${SRC}/core)
 
 enable_testing()
 
-# add_core_test(<name> <sources...>)
+# add_core_test(<name> <sources...> [DEFINES <definitions...>])
 function(add_core_test name)
-    add_executable(${name} ${ARGN} stubs/fake_flash.c)
+    cmake_parse_arguments(arg "" "" "DEFINES" ${ARGN})
+    add_executable(${name} ${arg_UNPARSED_ARGUMENTS} stubs/fake_flash.c)
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stubs ${SRC} ${CORE})
+    target_compile_definitions(${name} PRIVATE ${arg_DEFINES})
     target_compile_options(${name} PRIVATE -Wall -Wextra -Wconversion -Wsign-conversion -Wshadow -Werror)
     target_link_libraries(${name} PRIVATE unity::framework)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
 add_core_test(test_crc32 crc32.test.c ${CORE}/crc32.c)
-add_core_test(test_meta meta.test.c ${CORE}/meta.c ${CORE}/crc32.c)
-add_core_test(test_image image.test.c ${CORE}/image.c ${CORE}/crc32.c)
-add_core_test(test_responder responder.test.c ${CORE}/responder.c ${CORE}/image.c ${CORE}/meta.c ${CORE}/crc32.c)
-add_core_test(test_commander commander.test.c stubs/bus_stub.c
-    ${CORE}/commander.c ${CORE}/image.c ${CORE}/meta.c ${CORE}/crc32.c)
+
+# The tests that depend on the flash geometry run twice: with the small blocks of the test
+# configuration (several blocks per page, 16-bit writes), and with the block size equal to the page
+# size (like on the STM32F042) and 64-bit writes (like on the STM32G0/L4).
+foreach(i_variant "" "_page_blocks")
+    if(i_variant STREQUAL "_page_blocks")
+        set(_defines LINBOOT_BLOCK_SIZE=256u LINBOOT_FLASH_WRITE_ALIGN=8u)
+    else()
+        set(_defines "")
+    endif()
+    add_core_test(test_meta${i_variant} meta.test.c ${CORE}/meta.c ${CORE}/crc32.c DEFINES ${_defines})
+    add_core_test(test_image${i_variant} image.test.c ${CORE}/image.c ${CORE}/crc32.c DEFINES ${_defines})
+    add_core_test(test_responder${i_variant} responder.test.c
+        ${CORE}/responder.c ${CORE}/image.c ${CORE}/meta.c ${CORE}/crc32.c DEFINES ${_defines})
+    add_core_test(test_commander${i_variant} commander.test.c stubs/bus_stub.c
+        ${CORE}/commander.c ${CORE}/image.c ${CORE}/meta.c ${CORE}/crc32.c DEFINES ${_defines})
+endforeach()
+
+# The minimal libc of the firmware, under other names so that it doesn't replace the host's.
+add_core_test(test_mini_libc mini_libc.test.c ${CORE}/mini_libc.c)
+set_source_files_properties(${CORE}/mini_libc.c PROPERTIES
+    COMPILE_DEFINITIONS "memcpy=mini_memcpy;memmove=mini_memmove;memset=mini_memset")
 
 # Simulated bootloader for the Python host tool tests (tools/linboot/tests). Without sanitizers,
 # since it's loaded into the Python interpreter.

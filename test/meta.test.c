@@ -101,6 +101,22 @@ void test_load_identity(void)
     TEST_ASSERT_EQUAL_HEX16(0x0203, identity.firmware_version);
 }
 
+void test_corrupt_app_is_not_loaded_as_valid(void)
+{
+    // The record is intact, but the application isn't (e.g. a flash bit error): it must not be
+    // booted, unless the image check is disabled.
+    const uint32_t crc = s_put_image(300);
+    TEST_ASSERT_TRUE(meta_write(s_layout.meta_addr, 0x0203, 300, crc));
+    g_flash[123] ^= 0x10;
+    linboot_identity identity = {0};
+    meta_load_identity(&s_layout, true, &identity);
+    TEST_ASSERT_FALSE(identity.app_valid);
+    TEST_ASSERT_EQUAL_HEX16(0, identity.firmware_version);
+    meta_load_identity(&s_layout, false, &identity);
+    TEST_ASSERT_TRUE(identity.app_valid);
+    TEST_ASSERT_EQUAL_HEX16(0x0203, identity.firmware_version);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -111,5 +127,6 @@ int main(void)
     RUN_TEST(test_corrupt_image_is_not_valid);
     RUN_TEST(test_bad_sizes_are_not_valid);
     RUN_TEST(test_load_identity);
+    RUN_TEST(test_corrupt_app_is_not_loaded_as_valid);
     return UNITY_END();
 }

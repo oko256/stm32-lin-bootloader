@@ -295,16 +295,16 @@ void test_data_beyond_window_is_ignored(void)
 {
     s_offer(0x0200, 1000, 0);
     // The whole first block plus more, without polling (committing) in between.
-    for (uint32_t offset = 0; offset < 300; offset += PROTO_CHUNK_SIZE) {
+    for (uint32_t offset = 0; offset < FIRST_BLOCK_FULL_AT + 5 * PROTO_CHUNK_SIZE; offset += PROTO_CHUNK_SIZE) {
         s_data(offset, 1000);
     }
     uint8_t status[PROTO_FRAME_SIZE];
     s_status(status);
-    TEST_ASSERT_EQUAL_UINT32(133, proto_get_u24(&status[2]));
-    TEST_ASSERT_EQUAL_UINT32(133, proto_get_u24(&status[5])); // busy: commit needed
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT, proto_get_u24(&status[2]));
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT, proto_get_u24(&status[5])); // busy: commit needed
     TEST_ASSERT_EQUAL(LINBOOT_ACTION_NONE, s_poll());
     s_status(status);
-    TEST_ASSERT_EQUAL_UINT32(133, proto_get_u24(&status[2]));
+    TEST_ASSERT_EQUAL_UINT32(FIRST_BLOCK_FULL_AT, proto_get_u24(&status[2]));
     TEST_ASSERT_EQUAL_UINT32(2 * LINBOOT_BLOCK_SIZE, proto_get_u24(&status[5]));
 }
 
