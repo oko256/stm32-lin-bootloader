@@ -1,0 +1,9 @@
+[files]
+extend-exclude = ["Drivers", "Middlewares", "*.ld", "docs"]
+
+[default.extend-words]
+HSI = "HSI"
+SIZ = "SIZ"
+PTD = "PTD"
+# USART_CR1_UE (USART enable)
+UE = "UE"

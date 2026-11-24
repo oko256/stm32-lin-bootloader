@@ -1,0 +1,80 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "arm",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+        },
+        {
+            "name": "usb-lin-card",
+            "hidden": true,
+            "inherits": "arm",
+            "description": "USB LIN Card board (STM32F042G6U6, LIN on USART1 PB6/PB7, floating BOOT0) as the target",
+            "cacheVariables": {
+                "LINBOOT_DEVICE_TYPE": "0x0001",
+                "LINBOOT_HW_VERSION_DEFAULT": "3",
+                "LINBOOT_MCU": "STM32F042x6",
+                "LINBOOT_STM32F0_FORCE_FLASH_BOOT": "ON",
+                "BLINKY_LED_PIN": "PA7",
+                "BLINKY_LED_ACTIVE_LOW": "ON"
+            }
+        },
+        {
+            "name": "usb-lin-card-responder-debug",
+            "displayName": "USB LIN Card, RESPONDER role, Debug",
+            "inherits": "usb-lin-card",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LINBOOT_ROLE": "RESPONDER"
+            }
+        },
+        {
+            "name": "usb-lin-card-responder-release",
+            "displayName": "USB LIN Card, RESPONDER role, Release",
+            "inherits": "usb-lin-card",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "LINBOOT_ROLE": "RESPONDER"
+            }
+        },
+        {
+            "name": "usb-lin-card-commander-debug",
+            "displayName": "USB LIN Card, COMMANDER role, Debug",
+            "inherits": "usb-lin-card",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LINBOOT_ROLE": "COMMANDER"
+            }
+        },
+        {
+            "name": "usb-lin-card-commander-release",
+            "displayName": "USB LIN Card, COMMANDER role, Release",
+            "inherits": "usb-lin-card",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "LINBOOT_ROLE": "COMMANDER"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "usb-lin-card-responder-debug",
+            "configurePreset": "usb-lin-card-responder-debug"
+        },
+        {
+            "name": "usb-lin-card-responder-release",
+            "configurePreset": "usb-lin-card-responder-release"
+        },
+        {
+            "name": "usb-lin-card-commander-debug",
+            "configurePreset": "usb-lin-card-commander-debug"
+        },
+        {
+            "name": "usb-lin-card-commander-release",
+            "configurePreset": "usb-lin-card-commander-release"
+        }
+    ]
+}
