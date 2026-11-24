@@ -19,10 +19,10 @@ other STM32 families need only a new port (see [Porting](#porting)).
 Some of the files in this repository (`Drivers/CMSIS`) are under ARM's and ST's licenses, and those
 files keep their respective licenses regardless of the root LICENSE file.
 
-**Status:** both roles work on hardware (a USB LIN Card as the device, updated through another USB
-LIN Card; see [Hardware testing](#hardware-testing)). The bootloader, the protocol and the host
-tool are also covered by host tests, including end-to-end tests of the host tool against the real
-state machines. Automated system tests are not done yet.
+**Status:** both roles work on hardware, tested with automated system tests (a USB LIN Card as
+the device, updated through another USB LIN Card; see [System tests](#system-tests)). The
+bootloader, the protocol and the host tool are also covered by host tests, including end-to-end
+tests of the host tool against the real state machines.
 
 # User guide
 
@@ -388,29 +388,40 @@ tool against the real role state machines, built as a shared library (`test/sim/
 
 `./run-clang-format.sh` (clang-format 19) and `typos`.
 
-## Hardware testing
-
-Done manually so far, with two USB LIN Cards on the same LIN bus: the device under test (DUT) with
-an STLINK-V3 on its SWD header, and the adapter running the stock USB LIN Card firmware.
-
-- The DUT's option bytes must boot from the flash: `STM32_Programmer_CLI -c port=SWD mode=UR -ob
-  nBOOT0=1` (with BOOT_SEL=0). The bootloader can fix this by itself
-  (`LINBOOT_STM32F0_FORCE_FLASH_BOOT`), but only if it gets to run.
-- Flash the bootloader: `STM32_Programmer_CLI -c port=SWD mode=UR -e all -d build/<preset>/linboot.elf`.
-- Start `linboot.py update` or `serve`, then reset the DUT: `STM32_Programmer_CLI -c port=SWD
-  mode=HOTPLUG -hardRst`.
-- Check the result over SWD without disturbing the DUT (`mode=HOTPLUG`): the metadata at 0x08007C00
-  (`-r32 0x08007C00 24`), `SYSCFG_CFGR1` at 0x40010000 (`MEM_MODE` = 3 once the application is
-  running), the LED pin (GPIOA ODR at 0x48000014, bit 7 toggles with blinky), or read back the
-  application flash with `-u`.
-
-Tested in both roles: first install without an application, update in the boot window after a
-reset, same version rejected and FORCE reinstalling it, booting after the boot timeout without an
-updater, a 20 KB image (read back and compared), and an interrupted transfer (the device stays in
-the bootloader without a valid application, and the next update completes).
-
 ## System tests
 
-Not automated yet. The plan, modelled on usb-lin-card-fw: a USB LIN Card with the bootloader (flashed
-over SWD) as the device under test, a second one with the stock firmware as the adapter, and pytest
-tests that update blinky-slow and blinky-fast back and forth in both roles, with resets over SWD.
+`test_sys/` has automated tests on real hardware (pytest), with two USB LIN Cards on the same LIN
+bus (with the bus supply):
+
+- **The device under test (DUT):** a USB LIN Card with an STLINK on its SWD header. The tests
+  flash the bootloader on it (erasing everything), reset it, and check its state over SWD with
+  STM32_Programmer_CLI: the metadata record, the application flash (read back), `SYSCFG_CFGR1`
+  (`MEM_MODE` = 3 once the application runs), and the LED pin (blinky toggles it).
+- **The adapter:** a USB LIN Card with the stock firmware, used through the host tool's modules
+  (and its CLI in one test per role).
+
+The tests build the `usb-lin-card-{responder,commander}-release` presets themselves. If the DUT's
+option bytes don't boot from the flash, the tests set nBOOT0=1 and BOOT_SEL=0. Each test sets up its
+starting state over SWD (installing an application with its metadata, or erasing it), so the tests
+don't depend on each other.
+
+```bash
+cd test_sys
+pytest                     # everything, about 4 min
+pytest -m "not slow"       # without the 20 KB transfers, about 2 min
+pytest --adapter=/dev/ttyACM1 --programmer=/path/to/STM32_Programmer_CLI --no-build
+```
+
+The adapter port and the programmer can also be given with `LINBOOT_ADAPTER` and
+`STM32_PROGRAMMER_CLI`; the defaults are the adapter used so far and
+`~/STM32CubeProg/bin/STM32_Programmer_CLI`.
+
+Covered in both roles: first install without an application (and that the bootloader keeps
+waiting or looking), update in the boot window after a reset, same version (boots right away) and
+FORCE, booting after the boot timeout, the device type check, an interrupted transfer (the device
+stays in the bootloader, and the next update completes), a 20 KB image (marked slow), and the CLI.
+The RESPONDER role also installs an older version, and the COMMANDER role chooses the highest
+version among two providers (both played by the adapter).
+
+Useful manual SWD commands: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -hardRst` (reset),
+`-r32 0x08007C00 24` (metadata), `-r32 0x40010000 4` (`MEM_MODE`).
