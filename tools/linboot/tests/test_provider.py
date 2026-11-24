@@ -62,3 +62,19 @@ def test_missed_result_is_assumed_done_after_quiet_period():
 def test_quiet_without_full_read_keeps_waiting():
     bus = FakeBus([(0.0, 0x31, IDENTIFY), (0.1, 0x31, _read(0))])
     assert Provider(bus, bytes(range(100)), 0x0200, log=_quiet).run(timeout=5.0) is None
+
+
+def test_stops_serving_data_when_another_provider_is_selected():
+    image = bytes(range(20))
+    other_read = bytes([0x02, 0x01, 0, 0, 0, 0, 0, 0])
+    bus = FakeBus([(0.0, 0x31, IDENTIFY), (0.1, 0x31, _read(0)), (0.2, 0x31, other_read)])
+    Provider(bus, image, 0x0200, log=_quiet).run(timeout=1.0)
+    assert 0x32 in bus.configures[-2][1]
+    assert bus.configures[-1][1] == {0x33: p.offer_frame(0x0200, 20, False)}
+
+
+def test_stops_serving_data_on_new_discovery():
+    image = bytes(range(20))
+    bus = FakeBus([(0.0, 0x31, IDENTIFY), (0.1, 0x31, _read(0)), (0.2, 0x31, IDENTIFY)])
+    Provider(bus, image, 0x0200, log=_quiet).run(timeout=1.0)
+    assert bus.configures[-1][1] == {0x33: p.offer_frame(0x0200, 20, False)}

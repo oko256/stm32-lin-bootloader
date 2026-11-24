@@ -22,6 +22,7 @@ from swd import Swd  # noqa: E402
 from usblincard import UsbLinCard  # noqa: E402
 
 DEFAULT_ADAPTER = "/dev/serial/by-id/usb-oko256_USB_LIN_Card_204E357E4830-if00"
+DEFAULT_ADAPTER2 = "/dev/serial/by-id/usb-oko256_USB_LIN_Card_203DB55B4830-if00"
 DEFAULT_CLI = "~/STM32CubeProg/bin/STM32_Programmer_CLI"
 
 
@@ -30,6 +31,11 @@ def pytest_addoption(parser):
         "--adapter",
         default=os.environ.get("LINBOOT_ADAPTER", DEFAULT_ADAPTER),
         help="serial port of the adapter USB LIN Card (env LINBOOT_ADAPTER)",
+    )
+    parser.addoption(
+        "--adapter2",
+        default=os.environ.get("LINBOOT_ADAPTER2", DEFAULT_ADAPTER2),
+        help="serial port of a second adapter, for the tests with two providers (env LINBOOT_ADAPTER2)",
     )
     parser.addoption(
         "--programmer",
@@ -90,11 +96,10 @@ def adapter_port(request) -> str:
     return request.config.getoption("--adapter")
 
 
-@pytest.fixture
-def card(adapter_port):
-    """The adapter, opened for one test (the CLI tests open the port themselves). It starts and ends
-    closed with empty tables, so that it doesn't answer anything by itself."""
-    card = UsbLinCard(adapter_port, "adapter")
+def _open_card(port: str, name: str):
+    """Opens an adapter for one test. It starts and ends closed with empty tables, so that it doesn't
+    answer anything by itself."""
+    card = UsbLinCard(port, name)
 
     def clean():
         card.cmd("C")
@@ -106,6 +111,21 @@ def card(adapter_port):
     yield card
     clean()
     card.close()
+
+
+@pytest.fixture
+def card(adapter_port):
+    """The adapter (the CLI tests open the port themselves instead)."""
+    yield from _open_card(adapter_port, "adapter")
+
+
+@pytest.fixture
+def card2(request):
+    """A second adapter; the test is skipped if there's none."""
+    port = request.config.getoption("--adapter2")
+    if not Path(port).exists():
+        pytest.skip(f"no second adapter at {port}")
+    yield from _open_card(port, "adapter2")
 
 
 def reset_soon(dut: Dut, delay: float = 0.3) -> threading.Timer:

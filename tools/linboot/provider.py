@@ -85,14 +85,25 @@ class Provider:
                     f"{'' if details.app_valid else ' (no valid application)'}"
                 )
             offering = self._matches(details)
-            if offering != self.offering:
+            # A new discovery: whatever transfer there was is over, so stop serving DATA too.
+            if offering != self.offering or self.data is not None:
                 self.offering = offering
+                self.data = None
+                self.read_end = False
                 if not offering:
                     self.log("Not a matching device: not offering the image")
                 self._apply()
         elif code == p.Query.READ:
             provider, offset = details
-            if provider != self.index or not self.offering:
+            if provider != self.index:
+                # Another provider was selected: DATA is now its frame, and responding to it too
+                # would collide on the bus.
+                if self.data is not None:
+                    self.data = None
+                    self.read_end = False
+                    self._apply()
+                return
+            if not self.offering:
                 return
             if offset == 0:
                 self.log("Transfer started")

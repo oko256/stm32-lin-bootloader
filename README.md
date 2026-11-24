@@ -47,7 +47,10 @@ update.
 when there is no valid application. The updater can also set a **FORCE** flag to reinstall the same
 version (e.g. during development). In the COMMANDER role, the highest offered version is chosen
 (the first provider of equal ones), so providers with different versions can't make the device
-flip-flop between them. An offer with FORCE wins over all others.
+flip-flop between them. An offer with FORCE wins over all others. A provider whose transfer
+failed (e.g. its image doesn't match its CRC) is skipped in the next rounds while others offer
+something, so a broken provider can't keep the device from getting a working image; once all
+the offering providers have failed, they all get tried again.
 
 **Safety:** the metadata page is erased right before the first block of the new image is written,
 and written again only after the CRC of the whole image in the flash has been verified. A
@@ -196,6 +199,8 @@ the list. Providers are typically the applications of other nodes on the bus.
   response, advance to the next chunk. If the provider can't tell when its response was sent
   (like the USB LIN Card), it just keeps serving the chunk of the last READ: the bootloader notices
   the stale sequence number and sends a READ for the next chunk.
+- On a READ for another provider, or a new IDENTIFY: stop responding to DATA (another provider
+  may be selected now, and two responses would collide).
 - On RESULT: the update is done (error 0) or failed; nothing needs to be done.
 
 **Bootloader behaviour:**
@@ -209,7 +214,8 @@ the list. Providers are typically the applications of other nodes on the bus.
    attempt fails.
 4. After the stream, verify the flash CRC against the trailer, write the metadata, send RESULT and
    boot.
-5. A failed attempt sends RESULT with the error and starts over from IDENTIFY. After
+5. A failed attempt sends RESULT with the error and starts over from IDENTIFY (skipping that
+   provider while others offer, see above). After
    `LINBOOT_MAX_ATTEMPTS` failed attempts, the application is booted if it's still intact
    (nothing was written yet); otherwise the bootloader keeps trying.
 
@@ -421,7 +427,10 @@ waiting or looking), update in the boot window after a reset, same version (boot
 FORCE, booting after the boot timeout, the device type check, an interrupted transfer (the device
 stays in the bootloader, and the next update completes), a 20 KB image (marked slow), and the CLI.
 The RESPONDER role also installs an older version, and the COMMANDER role chooses the highest
-version among two providers (both played by the adapter).
+version among two providers (both played by the adapter). With a second adapter
+(`--adapter2`/`LINBOOT_ADAPTER2`; skipped without one), `test_commander_multi.py` has two real
+providers: the choice by version, index and FORCE, and falling back to the other provider when the
+chosen one disappears mid-transfer or serves a corrupt image.
 
 Useful manual SWD commands: `STM32_Programmer_CLI -c port=SWD mode=HOTPLUG -hardRst` (reset),
 `-r32 0x08007C00 24` (metadata), `-r32 0x40010000 4` (`MEM_MODE`).

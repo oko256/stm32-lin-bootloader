@@ -352,6 +352,35 @@ void test_crc_mismatch_retries_until_fixed(void)
     s_assert_installed(0x0200, 300);
 }
 
+void test_failed_provider_is_skipped_for_another(void)
+{
+    // The newest image is corrupt: after it fails, the other provider's image is installed.
+    s_add_provider(0, 0x0105, 700);
+    s_add_provider(1, 0x0107, 800);
+    s_providers[1].crc_xor = 1;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(60000));
+    s_assert_installed(0x0105, 700);
+    TEST_ASSERT_EQUAL_INT32(PROTO_ERR_CRC, s_providers[1].last_result);
+    TEST_ASSERT_EQUAL_UINT32(1, s_providers[1].read_count);
+    TEST_ASSERT_EQUAL_INT32(PROTO_ERR_NONE, s_providers[0].last_result);
+}
+
+void test_all_failed_providers_get_retried(void)
+{
+    // Both are corrupt: they are tried in turns (the old app is gone after the first attempt).
+    s_add_provider(0, 0x0105, 700);
+    s_add_provider(2, 0x0107, 800);
+    s_providers[0].crc_xor = 1;
+    s_providers[2].crc_xor = 1;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_NONE, s_run(30000));
+    TEST_ASSERT_GREATER_THAN_UINT32(2, s_providers[0].read_count);
+    TEST_ASSERT_GREATER_THAN_UINT32(2, s_providers[2].read_count);
+    // The newest one gets fixed, and is chosen again.
+    s_providers[2].crc_xor = 0;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(30000));
+    s_assert_installed(0x0107, 800);
+}
+
 void test_provider_disappears_before_writing_boots_old_app(void)
 {
     // Disappears right after the first chunks (before the first block is written): the old app
@@ -442,6 +471,8 @@ int main(void)
     RUN_TEST(test_lost_data_frames_are_recovered);
     RUN_TEST(test_slow_provider);
     RUN_TEST(test_crc_mismatch_retries_until_fixed);
+    RUN_TEST(test_failed_provider_is_skipped_for_another);
+    RUN_TEST(test_all_failed_providers_get_retried);
     RUN_TEST(test_provider_disappears_before_writing_boots_old_app);
     RUN_TEST(test_provider_disappears_after_writing_waits_for_one);
     RUN_TEST(test_flash_failure_is_reported);

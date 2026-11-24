@@ -29,13 +29,26 @@ static void s_send_result(linboot_commander* self, proto_error error)
 }
 
 /// Chooses an offer: the first one with FORCE, otherwise the highest version (the first of equal
-/// ones). Returns the provider index, or -1 if there's no offer.
-static int s_choose_offer(const linboot_commander* self)
+/// ones). Providers whose transfer has failed are skipped, unless they are all that's offered (so
+/// that a broken provider can't keep the device from getting a working image from another one).
+/// Returns the provider index, or -1 if there's no offer.
+static int s_choose_offer(linboot_commander* self)
 {
+    uint16_t offering = 0;
+    for (uint8_t i = 0; i < LINBOOT_PROVIDER_COUNT; ++i) {
+        if (self->offers[i].valid) {
+            offering |= (uint16_t)(1u << i);
+        }
+    }
+    if ((offering & ~self->failed_providers) == 0) {
+        // Everyone who offers has failed: give them all another chance.
+        self->failed_providers = 0;
+    }
+
     int best = -1;
     for (uint8_t i = 0; i < LINBOOT_PROVIDER_COUNT; ++i) {
         const linboot_offer* offer = &self->offers[i];
-        if (!offer->valid) {
+        if (!offer->valid || (self->failed_providers & (1u << i)) != 0) {
             continue;
         }
         if ((offer->flags & PROTO_OFFER_FLAG_FORCE) != 0) {
@@ -206,6 +219,7 @@ static linboot_action s_transaction_done(linboot_commander* self, uint32_t now_m
         if (self->result == PROTO_ERR_NONE) {
             return LINBOOT_ACTION_BOOT_APP;
         }
+        self->failed_providers |= (uint16_t)(1u << self->provider);
         self->attempts++;
         if (self->attempts >= LINBOOT_MAX_ATTEMPTS) {
             if (self->identity.app_valid) {

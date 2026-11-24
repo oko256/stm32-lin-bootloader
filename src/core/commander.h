@@ -64,6 +64,8 @@ typedef struct {
     // Discovery.
     uint8_t       offer_index;
     linboot_offer offers[LINBOOT_PROVIDER_COUNT];
+    /// Providers whose transfer failed (bit per provider index): skipped while others offer.
+    uint16_t      failed_providers;
 
     // Transfer.
     uint8_t     provider; ///< Index of the selected provider.
