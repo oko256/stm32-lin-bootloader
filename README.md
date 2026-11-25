@@ -99,9 +99,8 @@ Flash the bootloader with any SWD programmer, e.g.
 
 ## Host tool
 
-`tools/linboot/linboot.py` updates devices through a [USB LIN Card](https://github.com/oko256/usb-lin-card-fw)
-(any firmware version; 6 or later serves COMMANDER devices faster). It needs Python 3.10+ and pyserial. The frame IDs default to the defaults of the
-CMake options.
+`tools/linboot/linboot.py` updates devices through a [USB LIN Card](https://github.com/oko256/usb-lin-card-fw).
+It needs Python 3.10+ and pyserial. The frame IDs default to the defaults of the CMake options.
 
 ```bash
 # RESPONDER role: the PC is the commander. Start this, then reset the device.
@@ -112,7 +111,6 @@ tools/linboot/linboot.py -p /dev/ttyACM0 status                                 
 # Several RESPONDER nodes: all are caught in their bootloaders first, then updated in this order.
 tools/linboot/linboot.py -p /dev/ttyACM0 update-nodes \
     --node 0x30,0x31,0x32,app1.bin,1.1 --node 0x20,0x21,0x22,app2.bin,2.0,force
-
 
 # COMMANDER role: the PC is provider 0. Start this, then reset the device.
 tools/linboot/linboot.py -p /dev/ttyACM0 serve app.bin --version 1.1 --index 0
@@ -125,10 +123,8 @@ session timeout. A real commander updating several nodes must do the same.
 The card needs the LIN bus supply (V+), and the commander side (the card or the device) needs its
 MASTER pull-up jumper fitted.
 
-Serving a COMMANDER device is about three times faster with card firmware 6 or later. That
-firmware can replace one response and queue the next ones, so the DATA frames advance by
-themselves. `linboot.py` uses this automatically. With older firmware, every chunk needs its own
-READ (see [performance](#performance)).
+Serving a COMMANDER device is about three times faster with card firmware 6 or later, which
+`linboot.py` uses automatically (see [performance](#performance)).
 
 ## Protocol
 
@@ -236,18 +232,18 @@ the list. Providers are typically the applications of other nodes on the bus.
 
 ### Performance
 
-At 19200 baud, an 8-byte frame takes up to about 10 ms, so the bus carries at most about
-700 image bytes per second: a full 27 KB application would take about 40 s from an MCU provider
-(the DATA frames are polled back to back).
+At 19200 baud, an 8-byte frame takes about 7 ms (the bootloader's slot ends when the response is
+complete; without a response, after 11 ms). So when the DATA frames are polled back to back, the
+bus carries about 1000 image bytes per second: a full 27 KB application takes about 30 s.
 
 Measured with a USB LIN Card as the updater, 19200 baud, 20 KB image:
 
-- **RESPONDER role** (`linboot.py update`): 41 s, about 500 B/s. The card sends each DATA frame as a single
-  frame (`t0`), whose slot is the card's worst-case frame time (13 ms for 8 bytes).
+- **RESPONDER role** (`linboot.py update`): 41 s, about 500 B/s. The card sends each DATA frame as
+  a single frame (`t0`), whose slot is the card's worst-case frame time (13 ms for 8 bytes).
 - **COMMANDER role** (`linboot.py serve`), card firmware 6 or later: 21 s, about 980 B/s.
   - On a READ, the tool replaces the DATA response (`t2`) and queues the next 16 chunks (`t3`).
   - The card reports each published chunk, and the tool keeps the queue full.
-  - So the bootloader polls DATA back to back, and needs a READ only to resynchronize.
+  - So the bootloader polls DATA back to back, and sends a READ only to resynchronize.
 - **COMMANDER role, older card firmware:** 59 s, about 340 B/s.
   - The card can't advance its DATA response by itself, so each chunk takes three frames: a READ,
     the DATA frame, and a stale DATA frame that triggers the next READ.

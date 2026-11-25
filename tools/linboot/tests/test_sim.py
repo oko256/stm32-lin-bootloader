@@ -121,7 +121,7 @@ def _serve_time(image, **bus_mode) -> tuple[float, int]:
     assert _provider(bus, image, 0x0100).run(timeout=300) == p.Error.NONE
     bus.run_for(0.1)
     assert bus.installed() == (image, 0x0100)
-    reads = sum(1 for lin_id, data in bus.sent_queries if data[0] == p.Query.READ)
+    reads = sum(1 for query in bus.queries if query[0] == p.Query.READ)
     return bus.time() - start, reads
 
 

@@ -77,7 +77,7 @@ def test_first_install(dut, provider, firmware):
     _assert_installed(dut, firmware.blinky_slow, 0x0100)
 
 
-def test_update_after_reset(dut, provider, firmware, log):
+def test_update_after_reset(dut, provider, firmware):
     dut.install(firmware.blinky_slow, 0x0100)
     serving = provider(firmware.blinky_fast, 0x0101, device_type=DEVICE_TYPE, hardware_version=HW_VERSION)
     assert _serve(dut, serving) == p.Error.NONE

@@ -1,5 +1,5 @@
 """System tests: a USB LIN Card with the bootloader as the device under test (DUT), updated over
-LIN through another USB LIN Card (the adapter, stock firmware). The DUT is flashed, reset and
+LIN through another USB LIN Card (the adapter, running the card firmware). The DUT is flashed, reset and
 inspected over SWD with STM32_Programmer_CLI. See README.md (System tests)."""
 
 import os

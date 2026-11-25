@@ -1,6 +1,6 @@
 """Host-side driver for the USB LIN Card slcan-like serial protocol.
 
-Copied from usb-lin-card-fw (test_sys/usblincard.py), with pop_frame() added.
+Copied from usb-lin-card-fw (test_sys/usblincard.py), with pop_frame() and firmware_version() added.
 """
 
 import math

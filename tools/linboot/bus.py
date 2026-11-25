@@ -82,7 +82,7 @@ def _open_card(card: UsbLinCard, baud: int, classic_checksum: bool) -> None:
 
 
 class CardCommanderBus(CommanderBus):
-    """CommanderBus on a USB LIN Card (with the stock firmware).
+    """CommanderBus on a USB LIN Card.
 
     Frames are sent with single frames ("t0"). The card has no single header command, so a request
     temporarily schedules the header ("R0"), which repeats every slot until the response arrives,
@@ -118,8 +118,8 @@ class CardCommanderBus(CommanderBus):
 class CardResponderBus(ResponderBus):
     """ResponderBus on a USB LIN Card.
 
-    The card firmware 6 and later can replace a response ("t2") and queue the next ones ("t3"), and
-    then reports their publishes. Older firmware can only rewrite the whole table, and doesn't report
+    Card firmware 6 and later can replace a response ("t2") and queue the next ones ("t3"), and then
+    reports their publishes. Older firmware can only rewrite the whole table, and doesn't report
     its publishes: a provider then changes its DATA response only when it gets a READ.
     """
 

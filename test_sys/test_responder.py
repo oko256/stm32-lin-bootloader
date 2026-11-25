@@ -65,7 +65,7 @@ def test_update_in_boot_window(dut, updater, firmware):
     _assert_installed(dut, firmware.blinky_fast, 0x0101)
 
 
-def test_same_version_is_up_to_date(dut, updater, firmware, log):
+def test_same_version_is_up_to_date(dut, updater, firmware):
     dut.install(firmware.blinky_fast, 0x0101)
     reset_soon(dut)
     assert updater.update(firmware.blinky_slow, 0x0101, wait_timeout=5) == Outcome.UP_TO_DATE
@@ -106,7 +106,7 @@ def test_wrong_device_type_is_not_updated(dut, updater, firmware):
     _assert_installed(dut, firmware.blinky_slow, 0x0100)
 
 
-def test_interrupted_transfer_recovers(dut, updater, firmware, big_image, card):
+def test_interrupted_transfer_recovers(dut, updater, firmware, big_image):
     dut.install(firmware.blinky_slow, 0x0100)
 
     def progress(done, _total):

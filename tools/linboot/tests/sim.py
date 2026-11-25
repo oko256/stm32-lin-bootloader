@@ -126,8 +126,8 @@ class SimCommanderBus(SimDevice, ResponderBus):
         # (time the host gets it, id, data)
         self.received: list[tuple[int, int, bytes]] = []
         self.headers: list[int] = []
-        # The bootloader's own (QUERY) frames.
-        self.sent_queries: list[tuple[int, bytes]] = []
+        # The bootloader's QUERY frames.
+        self.queries: list[bytes] = []
         # Keep a reference: the callback must outlive its use from C.
         self._callback = HEADER_CALLBACK(self._on_header)
         self.lib.sim_commander_set_header_callback(self._callback)
@@ -137,7 +137,7 @@ class SimCommanderBus(SimDevice, ResponderBus):
         out = _buf()
         if self.lib.sim_commander_publish(lin_id, out, self.now):
             # The bootloader's own frame (QUERY).
-            self.sent_queries.append((lin_id, bytes(out)))
+            self.queries.append(bytes(out))
             if lin_id in self.subscribe:
                 self.received.append((self.now + self.latency_ms, lin_id, bytes(out)))
         elif lin_id in self.publish:
@@ -191,6 +191,7 @@ class SimCommanderBus(SimDevice, ResponderBus):
         end = self.now + int(timeout * 1000)
         while not self._ready() and self.now < end and not self.booted:
             self._step()
+        # Once booted, time doesn't advance any more: deliver what's still on its way.
         if self._ready() or (self.booted and self.received):
             _, lin_id, data = self.received.pop(0)
             return lin_id, data

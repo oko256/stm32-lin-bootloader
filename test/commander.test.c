@@ -319,7 +319,6 @@ void test_offer_of_the_first_round_counts_without_confirmation(void)
     // An offer that is missed in the confirmation round still counts.
     s_add_provider(0, 0x0200, 700);
     s_add_provider(1, 0x0100, 800);
-    s_providers[0].late = 0;
     s_providers[1].late = 5; // Never in the first two rounds.
     // Provider 0 drops out after the first round.
     while (s_identify_count < 2) {

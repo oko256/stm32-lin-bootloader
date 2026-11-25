@@ -56,16 +56,15 @@ class Provider:
         self.data: bytes | None = None
         self.last_identify: p.Identify | None = None
         self.result: int | None = None
-        # The last READ was for the end of the stream (or, when streaming, it was published).
+        # The end of the stream has been read (READ for it, or when streaming, published).
         self.read_end = False
-        # Streaming: the chunk offsets given to the bus and not published yet; the first one is the
-        # current response.
         self.streaming = bus.response_queue_depth > 0
+        # Streaming: the offsets of the chunks given to the bus and not published yet (the first one
+        # is the current response), and of the next chunk to queue.
         self.in_bus: deque[int] = deque()
         self.next_offset = 0
 
     def _apply(self) -> None:
-        self.in_bus.clear()
         publish = {}
         if self.offering:
             publish[self.ids.offers[self.index]] = self.offer
@@ -77,25 +76,20 @@ class Provider:
         self._apply()
 
     def _matches(self, identify: p.Identify) -> bool:
-        if self.device_type is not None and identify.device_type != self.device_type:
-            return False
-        if self.hardware_version is not None and identify.hardware_version != self.hardware_version:
-            return False
-        return True
+        return (self.device_type is None or identify.device_type == self.device_type) and (
+            self.hardware_version is None or identify.hardware_version == self.hardware_version
+        )
 
     def _stream_from(self, offset: int) -> None:
         """Serves DATA from @p offset on: the chunk at it is the current response, and the next ones
         are queued."""
-        data = p.chunk_frame(self.stream, offset)
-        if self.data is None:
-            # Add the DATA response to the table first.
-            self.data = data
+        in_table = self.data is not None
+        self.data = p.chunk_frame(self.stream, offset)
+        if not in_table:
             self._apply()
-        # Replacing also makes the bus report the publishes (even if nothing gets queued).
-        self.data = data
-        self.bus.replace_response(self.ids.data, data)
-        self.in_bus.clear()
-        self.in_bus.append(offset)
+        # Also makes the bus report the publishes (even if nothing gets queued).
+        self.bus.replace_response(self.ids.data, self.data)
+        self.in_bus = deque([offset])
         self.next_offset = offset + p.CHUNK_SIZE
         self._fill()
 
@@ -108,7 +102,7 @@ class Provider:
 
     def _published(self, data: bytes) -> None:
         """The bus reports that our DATA response @p data was published."""
-        if not self.in_bus or data != p.chunk_frame(self.stream, self.in_bus[0]):
+        if data != p.chunk_frame(self.stream, self.in_bus[0]):
             # Published before we replaced the response.
             return
         offset = self.in_bus[0]
@@ -191,9 +185,10 @@ class Provider:
         """Serves until the bootloader reports a successful result (if until_done), or until timeout.
         Returns the last result (error code), or None if there was none.
 
-        Without a response queue on the bus, the RESULT frames may be missed (while the responder
-        table is being rewritten), so if the bus goes quiet for quiet_timeout after the end of the stream was read, the update is assumed
-        to be done (the bootloader starts the application right after a successful update)."""
+        The RESULT frames may be missed (e.g. while the responder table is being rewritten without a
+        response queue), so if the bus goes quiet for quiet_timeout after the end of the stream was
+        read, the update is assumed to be done (the bootloader starts the application right after a
+        successful update)."""
         self.start()
         deadline = None if timeout is None else self.bus.time() + timeout
         last_frame = self.bus.time()
