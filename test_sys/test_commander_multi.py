@@ -31,10 +31,13 @@ class _Serving:
         self.active = False
 
     def poll(self):
-        if self.active:
-            frame = self.provider.bus.receive(0.01)
-            if frame is not None:
-                self.provider.handle_frame(*frame)
+        # Handle everything received so far without waiting: with a response queue, the card reports
+        # every DATA frame it publishes, and the provider must keep up with them.
+        while self.active:
+            frame = self.provider.bus.receive(0)
+            if frame is None:
+                return
+            self.provider.handle_frame(*frame)
 
 
 def _serve_all(dut: Dut, servings: list[_Serving], timeout: float = 120) -> _Serving | None:
@@ -48,6 +51,7 @@ def _serve_all(dut: Dut, servings: list[_Serving], timeout: float = 120) -> _Ser
             s.poll()
             if s.provider.result == p.Error.NONE:
                 return s
+        time.sleep(0.0005)
     return None
 
 
