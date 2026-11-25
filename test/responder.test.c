@@ -279,7 +279,7 @@ void test_repeated_and_wrong_chunks_are_ignored(void)
 {
     s_offer(0x0200, 100, 0);
     s_data(0, 100);
-    s_data(0, 100); // repeated
+    s_data(0, 100);  // repeated
     s_data(14, 100); // skipped one
     s_data(7, 100);
     uint8_t status[PROTO_FRAME_SIZE];

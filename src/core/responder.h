@@ -19,18 +19,18 @@
 
 /// RESPONDER role state.
 typedef struct {
-    linboot_identity identity; ///< Reported identity (firmware version updates on success).
-    proto_state      state; ///< Current protocol state.
-    proto_error      error; ///< Last error.
-    uint16_t         offered_version; ///< Version of the image being received.
-    uint32_t         finish_crc; ///< CRC from FINISH, verified in the poll.
-    uint8_t          next_seq; ///< Sequence number of the next expected chunk.
-    bool             session_started; ///< A frame for this node has been seen.
-    bool             boot_requested; ///< BOOT command received.
-    uint32_t         start_ms; ///< When the bootloader started (for the boot timeout).
+    linboot_identity identity;         ///< Reported identity (firmware version updates on success).
+    proto_state      state;            ///< Current protocol state.
+    proto_error      error;            ///< Last error.
+    uint16_t         offered_version;  ///< Version of the image being received.
+    uint32_t         finish_crc;       ///< CRC from FINISH, verified in the poll.
+    uint8_t          next_seq;         ///< Sequence number of the next expected chunk.
+    bool             session_started;  ///< A frame for this node has been seen.
+    bool             boot_requested;   ///< BOOT command received.
+    uint32_t         start_ms;         ///< When the bootloader started (for the boot timeout).
     uint32_t         last_activity_ms; ///< Last frame for this node (for the session timeout).
-    uint32_t         done_ms; ///< When the update completed (for the boot delay).
-    image_writer     image; ///< Writer of the received image.
+    uint32_t         done_ms;          ///< When the update completed (for the boot delay).
+    image_writer     image;            ///< Writer of the received image.
 } linboot_responder;
 
 /// Initializes the state machine. @p layout must outlive the state machine.

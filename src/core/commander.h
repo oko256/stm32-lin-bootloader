@@ -32,33 +32,33 @@
 
 /// Phase of the COMMANDER role state machine; each phase is one bus transaction.
 typedef enum {
-    LINBOOT_COMMANDER_IDENTIFY, ///< Broadcast IDENTIFY.
-    LINBOOT_COMMANDER_OFFER, ///< Poll the OFFER of provider offer_index.
-    LINBOOT_COMMANDER_READ, ///< Send READ to the selected provider.
+    LINBOOT_COMMANDER_IDENTIFY,  ///< Broadcast IDENTIFY.
+    LINBOOT_COMMANDER_OFFER,     ///< Poll the OFFER of provider offer_index.
+    LINBOOT_COMMANDER_READ,      ///< Send READ to the selected provider.
     LINBOOT_COMMANDER_POLL_DATA, ///< Poll DATA for the next chunk.
-    LINBOOT_COMMANDER_RESULT, ///< Send RESULT, then boot or retry.
+    LINBOOT_COMMANDER_RESULT,    ///< Send RESULT, then boot or retry.
 } linboot_commander_phase;
 
 /// An offer received from a provider.
 typedef struct {
-    bool     valid; ///< The provider has offered an image.
-    uint8_t  flags; ///< PROTO_OFFER_FLAG_*
+    bool     valid;   ///< The provider has offered an image.
+    uint8_t  flags;   ///< PROTO_OFFER_FLAG_*
     uint16_t version; ///< Offered firmware version.
-    uint32_t size; ///< Offered image size.
+    uint32_t size;    ///< Offered image size.
 } linboot_offer;
 
 /// COMMANDER role state.
 typedef struct {
     linboot_identity        identity; ///< Our identity (validity updates as the old app is erased).
     uint32_t                start_ms; ///< When the bootloader started (for the boot timeout).
-    linboot_commander_phase phase; ///< Current phase.
+    linboot_commander_phase phase;    ///< Current phase.
 
     // Current transaction.
     bool     in_transaction; ///< A header has been sent and the slot hasn't ended yet.
-    uint8_t  tx_id; ///< ID of the header.
-    uint32_t tx_start_ms; ///< When the header was sent.
-    bool     rx_done; ///< A response was received.
-    bool     published; ///< We published our own response.
+    uint8_t  tx_id;          ///< ID of the header.
+    uint32_t tx_start_ms;    ///< When the header was sent.
+    bool     rx_done;        ///< A response was received.
+    bool     published;      ///< We published our own response.
     uint8_t  rx[PROTO_FRAME_SIZE];
 
     // Discovery.
@@ -68,15 +68,15 @@ typedef struct {
     uint16_t      failed_providers;
 
     // Transfer.
-    uint8_t     provider; ///< Index of the selected provider.
-    uint16_t    version; ///< Version being installed.
-    uint32_t    stream_size; ///< Image size plus the CRC trailer.
-    uint32_t    chunk; ///< Next chunk to receive.
-    uint32_t    read_chunk; ///< Chunk of the last READ (UINT32_MAX: none yet).
+    uint8_t     provider;     ///< Index of the selected provider.
+    uint16_t    version;      ///< Version being installed.
+    uint32_t    stream_size;  ///< Image size plus the CRC trailer.
+    uint32_t    chunk;        ///< Next chunk to receive.
+    uint32_t    read_chunk;   ///< Chunk of the last READ (UINT32_MAX: none yet).
     uint8_t     poll_retries; ///< DATA polls without progress since the last READ.
     uint8_t     read_retries; ///< READs without progress.
-    uint8_t     attempts; ///< Failed update attempts.
-    proto_error result; ///< Result of the transfer, sent in RESULT.
+    uint8_t     attempts;     ///< Failed update attempts.
+    proto_error result;       ///< Result of the transfer, sent in RESULT.
     uint8_t     result_sends; ///< RESULT frames sent.
     uint8_t     trailer[PROTO_TRAILER_SIZE];
 

@@ -25,13 +25,13 @@
 
 /// Image writer state.
 typedef struct {
-    const linboot_layout* layout; ///< Where the image goes.
-    linboot_identity*     identity; ///< Invalidated when the old application is erased.
-    uint32_t              size; ///< Size of the image being received.
-    uint32_t              received; ///< Bytes received so far (the next expected offset).
+    const linboot_layout* layout;       ///< Where the image goes.
+    linboot_identity*     identity;     ///< Invalidated when the old application is erased.
+    uint32_t              size;         ///< Size of the image being received.
+    uint32_t              received;     ///< Bytes received so far (the next expected offset).
     uint32_t              block_offset; ///< Image offset of the first byte in the buffer.
-    uint32_t              fill; ///< Bytes in the buffer (may exceed the block size by the spill).
-    bool                  meta_erased; ///< The metadata page has been erased (old app invalidated).
+    uint32_t              fill;         ///< Bytes in the buffer (may exceed the block size by the spill).
+    bool                  meta_erased;  ///< The metadata page has been erased (old app invalidated).
     /// Block buffer plus room for the spill of one piece.
     uint8_t               buf[LINBOOT_BLOCK_SIZE + PROTO_CHUNK_SIZE];
 } image_writer;

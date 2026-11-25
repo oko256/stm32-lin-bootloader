@@ -6,6 +6,9 @@ AlignConsecutiveAssignments:          AcrossComments
 AlignConsecutiveBitFields:            AcrossComments
 AlignConsecutiveDeclarations:         AcrossComments
 AlignConsecutiveMacros:               AcrossComments
+AlignTrailingComments:
+  Kind:                               Always
+  OverEmptyLines:                     0
 AlignAfterOpenBracket:                AlwaysBreak
 BinPackArguments:                     false
 SpaceAfterTemplateKeyword:            false

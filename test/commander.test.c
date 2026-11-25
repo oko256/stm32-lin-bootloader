@@ -16,21 +16,21 @@ static const uint8_t s_offer_ids[LINBOOT_PROVIDER_COUNT] = LINBOOT_PROVIDER_OFFE
 
 /// A simulated provider node.
 typedef struct {
-    bool     present; ///< Powered on (responds to anything).
-    bool     has_image; ///< Responds to OFFER.
-    uint16_t version; ///< Offered version.
-    uint8_t  flags; ///< Offer flags.
-    uint32_t size; ///< Offered image size (the image is s_image).
-    uint32_t crc_xor; ///< Corrupts the CRC trailer.
-    bool     slow; ///< Doesn't advance by itself, applies READs only after `lag` DATA polls.
-    uint32_t lag; ///< See slow.
-    uint32_t drop_every; ///< Every Nth DATA response is lost (0: none).
-    uint32_t ptr; ///< Read pointer.
-    uint32_t pending_ptr; ///< Slow provider: READ not applied yet.
-    uint32_t lag_left; ///< Slow provider: DATA polls until pending_ptr is applied.
-    uint32_t data_count; ///< DATA responses so far.
-    uint32_t read_count; ///< READ requests for this provider.
-    int32_t  last_result; ///< Error code of the last RESULT for this provider (-1: none).
+    bool     present;      ///< Powered on (responds to anything).
+    bool     has_image;    ///< Responds to OFFER.
+    uint16_t version;      ///< Offered version.
+    uint8_t  flags;        ///< Offer flags.
+    uint32_t size;         ///< Offered image size (the image is s_image).
+    uint32_t crc_xor;      ///< Corrupts the CRC trailer.
+    bool     slow;         ///< Doesn't advance by itself, applies READs only after `lag` DATA polls.
+    uint32_t lag;          ///< See slow.
+    uint32_t drop_every;   ///< Every Nth DATA response is lost (0: none).
+    uint32_t ptr;          ///< Read pointer.
+    uint32_t pending_ptr;  ///< Slow provider: READ not applied yet.
+    uint32_t lag_left;     ///< Slow provider: DATA polls until pending_ptr is applied.
+    uint32_t data_count;   ///< DATA responses so far.
+    uint32_t read_count;   ///< READ requests for this provider.
+    int32_t  last_result;  ///< Error code of the last RESULT for this provider (-1: none).
     uint32_t result_count; ///< RESULT frames for this provider.
 } provider;
 

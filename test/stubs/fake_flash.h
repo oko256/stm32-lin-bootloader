@@ -25,11 +25,11 @@
 #define BLOCKS_FOR(size) (((size) + LINBOOT_BLOCK_SIZE - 1u) / LINBOOT_BLOCK_SIZE)
 
 extern uint8_t  g_flash[FAKE_FLASH_SIZE];
-extern uint32_t g_flash_erase_count; ///< Page erases so far.
-extern uint32_t g_flash_program_count; ///< Program calls so far.
-extern int32_t  g_flash_fail_erase_in; ///< Fail the erase after this many successful ones (-1: never).
+extern uint32_t g_flash_erase_count;     ///< Page erases so far.
+extern uint32_t g_flash_program_count;   ///< Program calls so far.
+extern int32_t  g_flash_fail_erase_in;   ///< Fail the erase after this many successful ones (-1: never).
 extern int32_t  g_flash_fail_program_in; ///< Fail the program after this many successful ones (-1: never).
-extern bool     g_flash_error; ///< A misuse was detected (unaligned, not erased, out of range).
+extern bool     g_flash_error;           ///< A misuse was detected (unaligned, not erased, out of range).
 
 /// Erases the whole flash and resets the counters and failure injection.
 void fake_flash_reset(void);

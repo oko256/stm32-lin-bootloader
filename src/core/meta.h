@@ -20,13 +20,13 @@
 
 /// The metadata record as stored in flash.
 typedef struct {
-    uint32_t magic; ///< META_MAGIC
+    uint32_t magic;            ///< META_MAGIC
     uint16_t firmware_version; ///< Version of the application (major << 8 | minor).
-    uint16_t reserved0; ///< 0xFFFF
-    uint32_t image_size; ///< Size of the application image in bytes.
-    uint32_t image_crc; ///< CRC32 of the application image.
-    uint32_t reserved1; ///< 0xFFFFFFFF
-    uint32_t record_crc; ///< CRC32 of the fields above.
+    uint16_t reserved0;        ///< 0xFFFF
+    uint32_t image_size;       ///< Size of the application image in bytes.
+    uint32_t image_crc;        ///< CRC32 of the application image.
+    uint32_t reserved1;        ///< 0xFFFFFFFF
+    uint32_t record_crc;       ///< CRC32 of the fields above.
 } meta_record;
 
 /// Reads the record at @p meta_addr into @p out_record. Returns true if the record is intact (magic
