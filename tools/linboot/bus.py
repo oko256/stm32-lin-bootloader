@@ -7,7 +7,7 @@ LIN Card as well as against the simulated bootloader in the tests.
 import time
 from abc import ABC, abstractmethod
 
-from usblincard import BAUD_PRESETS, UsbLinCard, R0, r1, t1
+from usblincard import BAUD_PRESETS, UsbLinCard, R0, r1, t1, t2, t3
 
 
 class Clock:
@@ -34,7 +34,15 @@ class CommanderBus(Clock, ABC):
 
 
 class ResponderBus(Clock, ABC):
-    """The host is a responder on the bus (a provider for a COMMANDER role bootloader)."""
+    """The host is a responder on the bus (a provider for a COMMANDER role bootloader).
+
+    A bus may also support changing one published response in place (replace_response()) and
+    queuing the next ones (queue_response()); response_queue_depth is then non-zero. The publishes
+    of a response changed that way are reported by receive() too, like received frames.
+    """
+
+    #: How many responses queue_response() can hold (0: neither it nor replace_response() is supported).
+    response_queue_depth = 0
 
     @abstractmethod
     def configure(self, subscribe: dict[int, int], publish: dict[int, bytes]) -> None:
@@ -43,7 +51,18 @@ class ResponderBus(Clock, ABC):
 
     @abstractmethod
     def receive(self, timeout: float) -> tuple[int, bytes] | None:
-        """Returns the next received (subscribed) frame as (id, data), or None on timeout."""
+        """Returns the next received (subscribed) or reported (published) frame as (id, data), or
+        None on timeout."""
+
+    def replace_response(self, lin_id: int, data: bytes) -> None:
+        """Replaces the published response of @p lin_id (from the next header on), and clears its
+        queued responses."""
+        raise NotImplementedError
+
+    def queue_response(self, lin_id: int, data: bytes) -> bool:
+        """Queues a response of @p lin_id to be published after the current one. Returns False if
+        the queue is full."""
+        raise NotImplementedError
 
 
 def _baud_command(baud: int) -> str:
@@ -97,16 +116,28 @@ class CardCommanderBus(CommanderBus):
 
 
 class CardResponderBus(ResponderBus):
-    """ResponderBus on a USB LIN Card (with the stock firmware).
+    """ResponderBus on a USB LIN Card.
 
-    The card can't change a single table entry, so every change rewrites the whole table. The card
-    doesn't report the frames it publishes itself either: a provider can only change its DATA
-    response when it gets a READ (the bootloader handles that).
+    The card firmware 6 and later can replace a response ("t2") and queue the next ones ("t3"), and
+    then reports their publishes. Older firmware can only rewrite the whole table, and doesn't report
+    its publishes: a provider then changes its DATA response only when it gets a READ.
     """
+
+    # Firmware version that has "t2" and "t3", and the size of its response queue.
+    QUEUE_FIRMWARE_VERSION = 6
+    QUEUE_DEPTH = 16
 
     def __init__(self, card: UsbLinCard, baud: int = 19200, classic_checksum: bool = False):
         self.card = card
         _open_card(card, baud, classic_checksum)
+        if card.firmware_version() >= self.QUEUE_FIRMWARE_VERSION:
+            self.response_queue_depth = self.QUEUE_DEPTH
+
+    def replace_response(self, lin_id: int, data: bytes) -> None:
+        self.card.cmd_ok(t2(lin_id, data))
+
+    def queue_response(self, lin_id: int, data: bytes) -> bool:
+        return self.card.cmd(t3(lin_id, data)).ok
 
     def configure(self, subscribe: dict[int, int], publish: dict[int, bytes]) -> None:
         self.card.cmd_ok("w")

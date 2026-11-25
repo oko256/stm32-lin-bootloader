@@ -83,8 +83,18 @@ def _provider(bus, image, version, **kwargs):
     return Provider(bus, image, version, ids=CommanderIds(offers=OFFER_IDS), log=_quiet, **kwargs)
 
 
-def test_serve_commander():
-    bus = SimCommanderBus(LIB, app_size=500, version=0x0100)
+# Response queue depth and USB latency of the bus: without a queue (stock USB LIN Card firmware),
+# and with one (firmware 6).
+BUS_MODES = {"no-queue": {}, "queue": {"queue_depth": 16, "latency_ms": 3}}
+
+
+@pytest.fixture(params=BUS_MODES.values(), ids=BUS_MODES.keys())
+def bus_mode(request):
+    return request.param
+
+
+def test_serve_commander(bus_mode):
+    bus = SimCommanderBus(LIB, app_size=500, version=0x0100, **bus_mode)
     image = _image(1500)
     provider = _provider(bus, image, 0x0102, device_type=DEVICE_TYPE, hardware_version=HW_VERSION)
     assert provider.run(timeout=120) == p.Error.NONE
@@ -94,13 +104,43 @@ def test_serve_commander():
     assert provider.last_identify.firmware_version == 0x0100
 
 
-def test_serve_commander_with_losses_as_second_provider():
-    bus = SimCommanderBus(LIB, loss=0.1, seed=5)
+def test_serve_commander_with_losses_as_second_provider(bus_mode):
+    bus = SimCommanderBus(LIB, loss=0.1, seed=5, **bus_mode)
     image = _image(APP_MAX, seed=2)
     provider = _provider(bus, image, 0x0203, index=2)
     assert provider.run(timeout=300) == p.Error.NONE
     bus.run_for(0.1)
     assert bus.installed() == (image, 0x0203)
+
+
+def _serve_time(image, **bus_mode) -> tuple[float, int]:
+    """Serves @p image to a bootloader without an application; returns the (virtual) time it took
+    and the number of READs."""
+    bus = SimCommanderBus(LIB, **bus_mode)
+    start = bus.time()
+    assert _provider(bus, image, 0x0100).run(timeout=300) == p.Error.NONE
+    bus.run_for(0.1)
+    assert bus.installed() == (image, 0x0100)
+    reads = sum(1 for lin_id, data in bus.sent_queries if data[0] == p.Query.READ)
+    return bus.time() - start, reads
+
+
+def test_serve_commander_queue_streams_data():
+    image = _image(APP_MAX)
+    plain_time, plain_reads = _serve_time(image)
+    queue_time, queue_reads = _serve_time(image, **BUS_MODES["queue"])
+    # Without a queue, nearly every chunk needs a READ; with one, only the first does.
+    assert plain_reads > len(image) // p.CHUNK_SIZE
+    assert queue_reads <= 2
+    assert queue_time < plain_time / 2
+
+
+def test_serve_commander_queue_runs_empty():
+    # The host is slower than the bus: the queue runs empty and the bootloader gets stale chunks,
+    # which it resynchronizes with READs.
+    image = _image(APP_MAX, seed=3)
+    _, reads = _serve_time(image, queue_depth=1, latency_ms=25)
+    assert reads > 10
 
 
 def test_serve_commander_up_to_date():

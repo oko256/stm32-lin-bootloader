@@ -198,10 +198,15 @@ def test_interrupted_transfer_recovers(dut, card, provider, firmware, big_image)
 @pytest.mark.slow
 def test_large_image(dut, provider, firmware, big_image):
     dut.install(firmware.blinky_slow, 0x0100)
+    serving = provider(big_image, 0x0200)
     start = time.monotonic()
-    assert _serve(dut, provider(big_image, 0x0200), timeout=180) == p.Error.NONE
-    print(f"{len(big_image)} bytes in {time.monotonic() - start:.1f} s")
+    assert _serve(dut, serving, timeout=180) == p.Error.NONE
+    elapsed = time.monotonic() - start
+    print(f"{len(big_image)} bytes in {elapsed:.1f} s ({'queued' if serving.streaming else 'no'} responses)")
     _assert_installed(dut, big_image, 0x0200)
+    if serving.streaming:
+        # The DATA frames are polled back to back (about 60 s without the response queue).
+        assert elapsed < 35
 
 
 def test_cli_serve(dut, firmware, adapter_port, tmp_path):

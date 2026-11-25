@@ -61,6 +61,14 @@ def t1(lin_id: int, data: bytes) -> str:
     return f"t1{lin_id:02X}{len(data)}{data.hex().upper()}"
 
 
+def t2(lin_id: int, data: bytes) -> str:
+    return f"t2{lin_id:02X}{len(data)}{data.hex().upper()}"
+
+
+def t3(lin_id: int, data: bytes) -> str:
+    return f"t3{lin_id:02X}{len(data)}{data.hex().upper()}"
+
+
 def r0(lin_id: int, length: int) -> str:
     return f"r0{lin_id:02X}{length}"
 
@@ -161,6 +169,11 @@ class UsbLinCard:
         while not self.cmd(t0(lin_id, data)).ok:
             assert time.monotonic() < deadline, f"{self.name}: single frame not accepted within {timeout} s"
             time.sleep(0.002)
+
+    def firmware_version(self) -> int:
+        r = self.cmd_ok("V")
+        assert len(r.payload) == 5 and r.payload[0] == "V", f"{self.name}: bad V reply {r.payload!r}"
+        return int(r.payload[3:], 16)
 
     def flags(self) -> int:
         r = self.cmd_ok("F")

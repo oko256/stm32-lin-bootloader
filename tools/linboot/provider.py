@@ -1,5 +1,6 @@
 """Provider: the host is a responder that provides the update for a COMMANDER role bootloader."""
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -19,8 +20,12 @@ class CommanderIds:
 
 class Provider:
     """Offers an image in the OFFER frame of provider @p index, and serves the DATA frame from the
-    offset of the last READ. The responses can't be changed after each published frame (the USB LIN
-    Card doesn't report them), so the bootloader sends a READ for (nearly) every chunk."""
+    offset of the last READ.
+
+    If the bus can queue responses (ResponderBus.response_queue_depth), the chunks after the READ
+    offset are queued, and the queue is kept full as the bus reports the published ones: the DATA
+    frames advance by themselves, like with an MCU provider. Otherwise the DATA response changes
+    only on a READ, so the bootloader sends a READ for (nearly) every chunk."""
 
     def __init__(
         self,
@@ -51,10 +56,16 @@ class Provider:
         self.data: bytes | None = None
         self.last_identify: p.Identify | None = None
         self.result: int | None = None
-        # The last READ was for the end of the stream.
+        # The last READ was for the end of the stream (or, when streaming, it was published).
         self.read_end = False
+        # Streaming: the chunk offsets given to the bus and not published yet; the first one is the
+        # current response.
+        self.streaming = bus.response_queue_depth > 0
+        self.in_bus: deque[int] = deque()
+        self.next_offset = 0
 
     def _apply(self) -> None:
+        self.in_bus.clear()
         publish = {}
         if self.offering:
             publish[self.ids.offers[self.index]] = self.offer
@@ -72,7 +83,48 @@ class Provider:
             return False
         return True
 
+    def _stream_from(self, offset: int) -> None:
+        """Serves DATA from @p offset on: the chunk at it is the current response, and the next ones
+        are queued."""
+        data = p.chunk_frame(self.stream, offset)
+        if self.data is None:
+            # Add the DATA response to the table first.
+            self.data = data
+            self._apply()
+        # Replacing also makes the bus report the publishes (even if nothing gets queued).
+        self.data = data
+        self.bus.replace_response(self.ids.data, data)
+        self.in_bus.clear()
+        self.in_bus.append(offset)
+        self.next_offset = offset + p.CHUNK_SIZE
+        self._fill()
+
+    def _fill(self) -> None:
+        while len(self.in_bus) <= self.bus.response_queue_depth and self.next_offset < len(self.stream):
+            if not self.bus.queue_response(self.ids.data, p.chunk_frame(self.stream, self.next_offset)):
+                break
+            self.in_bus.append(self.next_offset)
+            self.next_offset += p.CHUNK_SIZE
+
+    def _published(self, data: bytes) -> None:
+        """The bus reports that our DATA response @p data was published."""
+        if not self.in_bus or data != p.chunk_frame(self.stream, self.in_bus[0]):
+            # Published before we replaced the response.
+            return
+        offset = self.in_bus[0]
+        if len(self.in_bus) > 1:
+            # The next queued chunk is now the current response.
+            self.in_bus.popleft()
+        if offset + p.CHUNK_SIZE >= len(self.stream):
+            self.read_end = True
+        if self.progress is not None:
+            self.progress(min(offset + p.CHUNK_SIZE, len(self.image)), len(self.image))
+        self._fill()
+
     def handle_frame(self, lin_id: int, data: bytes) -> None:
+        if lin_id == self.ids.data and self.streaming and self.data is not None:
+            self._published(data)
+            return
         if lin_id != self.ids.query:
             return
         code, details = p.decode_query(data)
@@ -107,6 +159,10 @@ class Provider:
                 return
             if offset == 0:
                 self.log("Transfer started")
+            if self.streaming:
+                # Every READ restarts the stream: the queued chunks may have gone past the offset.
+                self._stream_from(offset)
+                return
             data = p.chunk_frame(self.stream, offset)
             if data == self.data:
                 # A repeated READ (we were too slow): already serving it, and rewriting the table
@@ -135,8 +191,8 @@ class Provider:
         """Serves until the bootloader reports a successful result (if until_done), or until timeout.
         Returns the last result (error code), or None if there was none.
 
-        The RESULT frames may be missed (while the responder table is being rewritten), so if the
-        bus goes quiet for quiet_timeout after the end of the stream was read, the update is assumed
+        Without a response queue on the bus, the RESULT frames may be missed (while the responder
+        table is being rewritten), so if the bus goes quiet for quiet_timeout after the end of the stream was read, the update is assumed
         to be done (the bootloader starts the application right after a successful update)."""
         self.start()
         deadline = None if timeout is None else self.bus.time() + timeout
