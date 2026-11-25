@@ -18,6 +18,7 @@ static void s_start_discovery(linboot_commander* self)
 {
     self->phase       = LINBOOT_COMMANDER_IDENTIFY;
     self->offer_index = 0;
+    self->confirming  = false;
     memset(self->offers, 0, sizeof(self->offers));
 }
 
@@ -61,10 +62,18 @@ static int s_choose_offer(linboot_commander* self)
     return best;
 }
 
-/// All offers have been polled: start the transfer, or decide to boot or to keep looking.
+/// All offers have been polled: start the transfer, or decide to boot or to keep looking. The first
+/// round with offers is followed by another one, and the offers of both count: a provider may start
+/// offering only when it sees IDENTIFY, and miss its OFFER slot of the first round.
 static linboot_action s_evaluate_offers(linboot_commander* self, uint32_t now_ms)
 {
     const int best = s_choose_offer(self);
+    if (best >= 0 && !self->confirming) {
+        self->confirming  = true;
+        self->phase       = LINBOOT_COMMANDER_IDENTIFY;
+        self->offer_index = 0;
+        return LINBOOT_ACTION_NONE;
+    }
     if (best < 0) {
         // Nobody has anything for us (yet).
         if (self->identity.app_valid && now_ms - self->start_ms >= LINBOOT_BOOT_TIMEOUT_MS) {

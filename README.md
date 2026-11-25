@@ -50,7 +50,9 @@ version (e.g. during development). In the COMMANDER role, the highest offered ve
 flip-flop between them. An offer with FORCE wins over all others. A provider whose transfer
 failed (e.g. its image doesn't match its CRC) is skipped in the next rounds while others offer
 something, so a broken provider can't keep the device from getting a working image; once all
-the offering providers have failed, they all get tried again.
+the offering providers have failed, they all get tried again. The choice is made from two discovery
+rounds: a provider may start offering only when it sees the first IDENTIFY, too late for its OFFER
+slot of that round.
 
 **Safety:** the metadata page is erased right before the first block of the new image is written,
 and written again only after the CRC of the whole image in the flash has been verified. A
@@ -218,7 +220,8 @@ the list. Providers are typically the applications of other nodes on the bus.
 **Bootloader behaviour:**
 
 1. Send IDENTIFY, then the header of each OFFER_k. Repeat until the boot timeout (forever if there
-   is no valid application).
+   is no valid application). After the first round that got an offer, do one more round; the
+   offers of both rounds count.
 2. Choose an offer (see [How it works](#how-it-works)), or boot.
 3. Send READ(k, 0) and poll DATA. Accept a chunk with the expected sequence number. Otherwise, poll
    again up to `LINBOOT_POLL_RETRIES` times, or right away send READ for the expected chunk if the

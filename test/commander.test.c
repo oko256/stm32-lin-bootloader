@@ -18,6 +18,7 @@ static const uint8_t s_offer_ids[LINBOOT_PROVIDER_COUNT] = LINBOOT_PROVIDER_OFFE
 typedef struct {
     bool     present;      ///< Powered on (responds to anything).
     bool     has_image;    ///< Responds to OFFER.
+    uint32_t late;         ///< Responds to OFFER only after this many IDENTIFYs.
     uint16_t version;      ///< Offered version.
     uint8_t  flags;        ///< Offer flags.
     uint32_t size;         ///< Offered image size (the image is s_image).
@@ -129,7 +130,7 @@ static void s_on_header(uint8_t id)
     }
     for (uint8_t k = 0; k < LINBOOT_PROVIDER_COUNT; ++k) {
         const provider* p = &s_providers[k];
-        if (id == s_offer_ids[k] && p->present && p->has_image) {
+        if (id == s_offer_ids[k] && p->present && p->has_image && s_identify_count > p->late) {
             uint8_t offer[PROTO_FRAME_SIZE] = {0};
             proto_put_u16(&offer[0], p->version);
             proto_put_u24(&offer[2], p->size);
@@ -291,6 +292,43 @@ void test_equal_versions_choose_the_first(void)
     s_add_provider(2, 0x0200, 800);
     TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(20000));
     s_assert_installed(0x0200, 700);
+}
+
+void test_offer_from_the_confirmation_round_counts(void)
+{
+    // Provider 0 starts offering only after the first IDENTIFY, so it misses the first round.
+    s_add_provider(0, 0x0200, 700);
+    s_add_provider(1, 0x0200, 800);
+    s_providers[0].late = 1;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(20000));
+    s_assert_installed(0x0200, 700);
+    TEST_ASSERT_EQUAL_UINT32(0, s_providers[1].read_count);
+}
+
+void test_late_higher_version_is_chosen(void)
+{
+    s_add_provider(0, 0x0102, 700);
+    s_add_provider(1, 0x0105, 800);
+    s_providers[1].late = 1;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_BOOT_APP, s_run(20000));
+    s_assert_installed(0x0105, 800);
+}
+
+void test_offer_of_the_first_round_counts_without_confirmation(void)
+{
+    // An offer that is missed in the confirmation round still counts.
+    s_add_provider(0, 0x0200, 700);
+    s_add_provider(1, 0x0100, 800);
+    s_providers[0].late = 0;
+    s_providers[1].late = 5; // Never in the first two rounds.
+    // Provider 0 drops out after the first round.
+    while (s_identify_count < 2) {
+        TEST_ASSERT_EQUAL(LINBOOT_ACTION_NONE, s_run(1));
+    }
+    s_providers[0].has_image = false;
+    TEST_ASSERT_EQUAL(LINBOOT_ACTION_NONE, s_run((LINBOOT_PROVIDER_COUNT + 3) * LINBOOT_SLOT_MS));
+    // The transfer from provider 0 has started.
+    TEST_ASSERT_EQUAL(0, s_selected);
 }
 
 void test_no_update_when_highest_is_installed(void)
@@ -465,6 +503,9 @@ int main(void)
     RUN_TEST(test_older_version_is_installed_too);
     RUN_TEST(test_highest_version_is_chosen);
     RUN_TEST(test_equal_versions_choose_the_first);
+    RUN_TEST(test_offer_from_the_confirmation_round_counts);
+    RUN_TEST(test_late_higher_version_is_chosen);
+    RUN_TEST(test_offer_of_the_first_round_counts_without_confirmation);
     RUN_TEST(test_no_update_when_highest_is_installed);
     RUN_TEST(test_force_wins);
     RUN_TEST(test_oversized_offer_is_ignored);
