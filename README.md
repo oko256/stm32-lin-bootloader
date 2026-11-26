@@ -123,8 +123,8 @@ session timeout. A real commander updating several nodes must do the same.
 The card needs the LIN bus supply (V+), and the commander side (the card or the device) needs its
 MASTER pull-up jumper fitted.
 
-Serving a COMMANDER device is about three times faster with card firmware 6 or later, which
-`linboot.py` uses automatically (see [performance](#performance)).
+Card firmware 6 or later makes the updates faster, about 1.7 times in the RESPONDER role and 3
+times in the COMMANDER role. `linboot.py` uses it automatically (see [performance](#performance)).
 
 ## Protocol
 
@@ -238,7 +238,13 @@ bus carries about 1000 image bytes per second: a full 27 KB application takes ab
 
 Measured with a USB LIN Card as the updater, 19200 baud, 20 KB image:
 
-- **RESPONDER role** (`linboot.py update`): 41 s, about 500 B/s. The card sends each DATA frame as
+- **RESPONDER role** (`linboot.py update`), card firmware 6 or later: 24 s, about 850 B/s.
+  - The tool schedules 16 DATA command frames (`T0`) and a STATUS poll (`R0`) on the card. The
+    frames go back to back, and their responses come from the response queue (`t2`/`t3`).
+  - The tool queues the chunks up to the window of the latest STATUS, and keeps the queue full as
+    the card reports the sent ones. If a STATUS shows that a chunk was lost, it restarts from there.
+  - Most of the rest is waiting for the next STATUS at the end of each 1 KB window.
+- **RESPONDER role, older card firmware:** 41 s, about 500 B/s. The card sends each DATA frame as
   a single frame (`t0`), whose slot is the card's worst-case frame time (13 ms for 8 bytes).
 - **COMMANDER role** (`linboot.py serve`), card firmware 6 or later: 21 s, about 980 B/s.
   - On a READ, the tool replaces the DATA response (`t2`) and queues the next 16 chunks (`t3`).

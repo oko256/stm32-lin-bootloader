@@ -4,6 +4,7 @@ import random
 
 import protocol as p
 import pytest
+from bus import CardCommanderBus
 from provider import CommanderIds, Provider
 from updater import Outcome, UpdateError, Updater
 from sim import DEVICE_TYPE, HW_VERSION, OFFER_IDS, SimCommanderBus, SimResponderBus, load_lib
@@ -22,11 +23,21 @@ def _quiet(_text: str) -> None:
     pass
 
 
+# Response queue depth and USB latency of the bus: without a queue (USB LIN Card firmware older
+# than 6), and with one.
+BUS_MODES = {"no-queue": {}, "queue": {"queue_depth": 16, "latency_ms": 3}}
+
+
+@pytest.fixture(params=BUS_MODES.values(), ids=BUS_MODES.keys())
+def bus_mode(request):
+    return request.param
+
+
 # RESPONDER role: the host updates the bootloader.
 
 
-def test_update_responder():
-    bus = SimResponderBus(LIB, app_size=500, version=0x0100)
+def test_update_responder(bus_mode):
+    bus = SimResponderBus(LIB, app_size=500, version=0x0100, **bus_mode)
     image = _image(1500)
     updater = Updater(bus, log=_quiet)
     assert updater.update(image, 0x0102, device_type=DEVICE_TYPE, hardware_version=HW_VERSION) == Outcome.UPDATED
@@ -34,11 +45,47 @@ def test_update_responder():
     assert bus.booted
 
 
-def test_update_responder_full_size_with_losses():
-    bus = SimResponderBus(LIB, loss=0.1, seed=3)
+def test_update_responder_full_size_with_losses(bus_mode):
+    bus = SimResponderBus(LIB, loss=0.1, seed=3, **bus_mode)
     image = _image(APP_MAX, seed=1)
     assert Updater(bus, log=_quiet).update(image, 0x0001) == Outcome.UPDATED
     assert bus.installed() == (image, 0x0001)
+
+
+def _update_time(image, **bus_mode) -> float:
+    """Updates a bootloader without an application to @p image; returns the (virtual) time it
+    took."""
+    bus = SimResponderBus(LIB, **bus_mode)
+    start = bus.time()
+    assert Updater(bus, log=_quiet).update(image, 0x0100) == Outcome.UPDATED
+    assert bus.installed() == (image, 0x0100)
+    return bus.time() - start
+
+
+def test_update_responder_queue_streams_data():
+    # The simulated bootloader's windows are only 128 bytes, and the stream waits for the next
+    # STATUS at the end of each one, so the difference is much smaller than on the real device.
+    image = _image(APP_MAX)
+    assert _update_time(image, **BUS_MODES["queue"]) < 0.9 * _update_time(image)
+
+
+def test_update_responder_queue_runs_empty():
+    # The host is slower than the bus: the queue runs empty, and the bus repeats the last chunk.
+    bus = SimResponderBus(LIB, queue_depth=1, latency_ms=25)
+    image = _image(APP_MAX, seed=4)
+    assert Updater(bus, log=_quiet).update(image, 0x0100) == Outcome.UPDATED
+    assert bus.installed() == (image, 0x0100)
+    assert bus.headers.count(0x32) > 2 * len(image) // p.CHUNK_SIZE
+
+
+def test_update_responder_stream_keeps_others_alive():
+    # The heartbeats of the nodes waiting for their turn are polled in the stream too.
+    bus = SimResponderBus(LIB, **BUS_MODES["queue"])
+    updater = Updater(bus, log=_quiet, keep_alive=[0x20, 0x21])
+    assert updater.update(_image(APP_MAX), 0x0100) == Outcome.UPDATED
+    streamed = bus.headers.count(0x32)
+    assert bus.headers.count(0x20) >= streamed // CardCommanderBus.STREAM_FRAMES
+    assert bus.headers.count(0x21) >= streamed // CardCommanderBus.STREAM_FRAMES
 
 
 def test_update_responder_same_version():
@@ -81,16 +128,6 @@ def test_responder_boots_without_heartbeat():
 
 def _provider(bus, image, version, **kwargs):
     return Provider(bus, image, version, ids=CommanderIds(offers=OFFER_IDS), log=_quiet, **kwargs)
-
-
-# Response queue depth and USB latency of the bus: without a queue (stock USB LIN Card firmware),
-# and with one (firmware 6).
-BUS_MODES = {"no-queue": {}, "queue": {"queue_depth": 16, "latency_ms": 3}}
-
-
-@pytest.fixture(params=BUS_MODES.values(), ids=BUS_MODES.keys())
-def bus_mode(request):
-    return request.param
 
 
 def test_serve_commander(bus_mode):
@@ -141,6 +178,14 @@ def test_serve_commander_queue_runs_empty():
     image = _image(APP_MAX, seed=3)
     _, reads = _serve_time(image, queue_depth=1, latency_ms=25)
     assert reads > 10
+
+
+def test_serve_commander_corrupt_image_fails_verification(bus_mode):
+    bus = SimCommanderBus(LIB, app_size=500, version=0x0100, **bus_mode)
+    provider = _provider(bus, _image(700), 0x0102)
+    provider.stream = provider.stream[:-1] + bytes([provider.stream[-1] ^ 0xFF])  # the CRC trailer
+    assert provider.run(timeout=10) == p.Error.CRC
+    assert bus.installed() is None
 
 
 def test_serve_commander_up_to_date():

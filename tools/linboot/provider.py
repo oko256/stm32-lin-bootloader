@@ -1,11 +1,11 @@
 """Provider: the host is a responder that provides the update for a COMMANDER role bootloader."""
 
-from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
 
 import protocol as p
 from bus import ResponderBus
+from stream import ChunkStream
 
 
 @dataclass
@@ -59,10 +59,7 @@ class Provider:
         # The end of the stream has been read (READ for it, or when streaming, published).
         self.read_end = False
         self.streaming = bus.response_queue_depth > 0
-        # Streaming: the offsets of the chunks given to the bus and not published yet (the first one
-        # is the current response), and of the next chunk to queue.
-        self.in_bus: deque[int] = deque()
-        self.next_offset = 0
+        self.chunks: ChunkStream | None = None
 
     def _apply(self) -> None:
         publish = {}
@@ -81,39 +78,23 @@ class Provider:
         )
 
     def _stream_from(self, offset: int) -> None:
-        """Serves DATA from @p offset on: the chunk at it is the current response, and the next ones
-        are queued."""
-        in_table = self.data is not None
-        self.data = p.chunk_frame(self.stream, offset)
-        if not in_table:
+        """Serves DATA from @p offset on, through the bus's response queue."""
+        if self.data is None:
+            # Add the DATA response to the table first.
+            self.data = p.chunk_frame(self.stream, offset)
             self._apply()
-        # Also makes the bus report the publishes (even if nothing gets queued).
-        self.bus.replace_response(self.ids.data, self.data)
-        self.in_bus = deque([offset])
-        self.next_offset = offset + p.CHUNK_SIZE
-        self._fill()
-
-    def _fill(self) -> None:
-        while len(self.in_bus) <= self.bus.response_queue_depth and self.next_offset < len(self.stream):
-            if not self.bus.queue_response(self.ids.data, p.chunk_frame(self.stream, self.next_offset)):
-                break
-            self.in_bus.append(self.next_offset)
-            self.next_offset += p.CHUNK_SIZE
+            self.chunks = ChunkStream(self.bus, self.ids.data, self.stream)
+        self.chunks.restart(offset, len(self.stream))
 
     def _published(self, data: bytes) -> None:
         """The bus reports that our DATA response @p data was published."""
-        if data != p.chunk_frame(self.stream, self.in_bus[0]):
-            # Published before we replaced the response.
+        offset = self.chunks.published(data)
+        if offset is None:
             return
-        offset = self.in_bus[0]
-        if len(self.in_bus) > 1:
-            # The next queued chunk is now the current response.
-            self.in_bus.popleft()
         if offset + p.CHUNK_SIZE >= len(self.stream):
             self.read_end = True
         if self.progress is not None:
             self.progress(min(offset + p.CHUNK_SIZE, len(self.image)), len(self.image))
-        self._fill()
 
     def handle_frame(self, lin_id: int, data: bytes) -> None:
         if lin_id == self.ids.data and self.streaming and self.data is not None:

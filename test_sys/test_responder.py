@@ -137,8 +137,13 @@ def test_large_image(dut, updater, firmware, big_image):
     reset_soon(dut)
     start = time.monotonic()
     assert updater.update(big_image, 0x0200, wait_timeout=5) == Outcome.UPDATED
-    print(f"{len(big_image)} bytes in {time.monotonic() - start:.1f} s")
+    elapsed = time.monotonic() - start
+    streamed = updater.bus.response_queue_depth > 0
+    print(f"{len(big_image)} bytes in {elapsed:.1f} s ({'streamed' if streamed else 'single'} frames)")
     _assert_installed(dut, big_image, 0x0200)
+    if streamed:
+        # The DATA frames go back to back (about 41 s as single frames).
+        assert elapsed < 30
 
 
 def test_cli_update(dut, firmware, adapter_port, tmp_path):

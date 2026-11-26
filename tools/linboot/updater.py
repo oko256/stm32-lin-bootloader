@@ -6,6 +6,7 @@ from typing import Callable
 
 import protocol as p
 from bus import CommanderBus
+from stream import ChunkStream
 
 
 class UpdateError(Exception):
@@ -27,8 +28,12 @@ class ResponderIds:
 
 
 class Updater:
-    """Runs the update sequence: wait for the heartbeat response, OFFER, stream the chunks up to the
-    window the bootloader reports, FINISH, and BOOT."""
+    """Runs the update sequence: wait for the heartbeat response, OFFER, send the chunks up to the
+    window the bootloader reports, FINISH, and BOOT.
+
+    If the bus has a response queue (CommanderBus.response_queue_depth), the chunks are streamed:
+    the bus sends the DATA frames back to back and polls the STATUS in between. Otherwise each
+    chunk is a single frame, and the STATUS is requested after each window."""
 
     def __init__(
         self,
@@ -135,27 +140,9 @@ class Updater:
         if status.state == p.State.FAILED and status.error == p.Error.BAD_SIZE:
             raise UpdateError(f"the image ({size} bytes) doesn't fit in the device")
 
-        # Stream the chunks; the bootloader reports where it is and how far we may go.
-        last_progress = self.bus.time()
-        last_next = -1
-        while True:
-            if status.state != p.State.RECEIVING:
-                self.log(f"Transfer interrupted: {status.describe()}")
-                return None
-            next_offset = status.next_offset
-            if next_offset != last_next:
-                last_next = next_offset
-                last_progress = self.bus.time()
-                if self.progress is not None:
-                    self.progress(min(next_offset, size), size)
-            elif self.bus.time() - last_progress > self.stall_timeout:
-                self.log("Transfer stalled")
-                return None
-            if next_offset >= size:
-                break
-            for offset in range(next_offset, min(status.window_end, size), p.CHUNK_SIZE):
-                self.bus.send_frame(self.ids.data, p.chunk_frame(image, offset))
-            status = self._status_until(self.stall_timeout)
+        send = self._stream_chunks if self.bus.response_queue_depth > 0 else self._send_chunks
+        if not send(image, status):
+            return None
 
         self.send_cmd(p.cmd_finish(p.crc32(image)))
         deadline = self.bus.time() + self.stall_timeout
@@ -173,6 +160,91 @@ class Updater:
             if status.state == p.State.RECEIVING:
                 # FINISH was lost on the bus (all the data is in: it was only sent after that).
                 self.send_cmd(p.cmd_finish(p.crc32(image)))
+
+    def _send_chunks(self, image: bytes, status: p.Status) -> bool:
+        """Sends the chunks as single frames, up to the window of each STATUS. Returns True once the
+        bootloader has received all of them."""
+        size = len(image)
+        progress = _Progress(self, size)
+        while progress.update(status):
+            if status.next_offset >= size:
+                return True
+            for offset in range(status.next_offset, _window(status, size), p.CHUNK_SIZE):
+                self.bus.send_frame(self.ids.data, p.chunk_frame(image, offset))
+            status = self._status_until(self.stall_timeout)
+        return False
+
+    def _stream_chunks(self, image: bytes, status: p.Status) -> bool:
+        """Streams the chunks through the bus's response queue, up to the window of the latest
+        STATUS, which the bus polls between the DATA frames (and the heartbeats of keep_alive).
+        Returns True once the bootloader has received all of them."""
+        size = len(image)
+        progress = _Progress(self, size)
+        polls = {status_id: p.FRAME_SIZE for status_id in [self.ids.status, *self.keep_alive]}
+        self.bus.start_stream(self.ids.data, p.chunk_frame(image, status.next_offset), polls)
+        try:
+            chunks = ChunkStream(self.bus, self.ids.data, image)
+            chunks.restart(status.next_offset, _window(status, size))
+            # End of the chunks published since the last restart: the bus reports in bus order, so a
+            # STATUS reported after them reflects them.
+            sent_end = status.next_offset
+            while progress.check():
+                frame = self.bus.receive(0.1)
+                if frame is None:
+                    continue
+                lin_id, data = frame
+                if lin_id == self.ids.data:
+                    offset = chunks.published(data)
+                    if offset is not None:
+                        sent_end = offset + p.CHUNK_SIZE
+                elif lin_id == self.ids.status:
+                    status = p.Status.decode(data)
+                    if not progress.update(status):
+                        return False
+                    if status.next_offset >= size:
+                        return True
+                    if status.next_offset < sent_end:
+                        # A chunk was lost: the bootloader ignores the ones after it.
+                        chunks.restart(status.next_offset, _window(status, size))
+                        sent_end = status.next_offset
+                    else:
+                        chunks.extend(_window(status, size))
+            return False
+        finally:
+            self.bus.stop_stream()
+
+
+def _window(status: p.Status, size: int) -> int:
+    return min(status.window_end, size)
+
+
+class _Progress:
+    """Follows the next_offset of the STATUS: reports the progress, and notices a stalled transfer."""
+
+    def __init__(self, updater: Updater, size: int):
+        self.updater = updater
+        self.size = size
+        self.last_next = -1
+        self.last_time = updater.bus.time()
+
+    def update(self, status: p.Status) -> bool:
+        """Returns False if the transfer has stalled or was interrupted (and logs why)."""
+        updater = self.updater
+        if status.state != p.State.RECEIVING:
+            updater.log(f"Transfer interrupted: {status.describe()}")
+            return False
+        if status.next_offset != self.last_next:
+            self.last_next = status.next_offset
+            self.last_time = updater.bus.time()
+            if updater.progress is not None:
+                updater.progress(min(status.next_offset, self.size), self.size)
+        return self.check()
+
+    def check(self) -> bool:
+        if self.updater.bus.time() - self.last_time > self.updater.stall_timeout:
+            self.updater.log("Transfer stalled")
+            return False
+        return True
 
 
 @dataclass
