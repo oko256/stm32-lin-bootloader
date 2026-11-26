@@ -418,6 +418,10 @@ tool against the real role state machines, built as a shared library (`test/sim/
 
 `./run-clang-format.sh` (clang-format 19) and `typos`.
 
+CI (`.github/workflows/ci.yml`) runs these checks and the unit tests (with the host tool's tests,
+on Python 3.10) on pushes to main and on pull requests. It doesn't build the firmware: the presets
+are an example for one board.
+
 ## System tests
 
 `test_sys/` has automated tests on real hardware (pytest), with two USB LIN Cards on the same LIN
