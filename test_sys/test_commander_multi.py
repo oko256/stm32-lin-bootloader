@@ -27,7 +27,7 @@ class _Serving:
         self.provider = Provider(CardResponderBus(card), image, version, index=index, log=log, **kwargs)
 
     def disappear(self):
-        self.card.cmd("C")
+        self.card.close_channel()
         self.active = False
 
     def poll(self):
