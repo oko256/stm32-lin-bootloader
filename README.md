@@ -416,7 +416,8 @@ tool against the real role state machines, built as a shared library (`test/sim/
 
 ## Formatting and spelling
 
-`./run-clang-format.sh` (clang-format 19) and `typos`.
+`./run-clang-format.sh` (clang-format 19), `ruff format` and `ruff check` (ruff 0.17.6, for the
+Python code; settings in `ruff.toml`), and `typos`.
 
 CI (`.github/workflows/ci.yml`) runs these checks and the unit tests (with the host tool's tests,
 on Python 3.10) on pushes to main and on pull requests. It doesn't build the firmware: the presets
