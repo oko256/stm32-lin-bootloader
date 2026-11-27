@@ -100,7 +100,7 @@ Flash the bootloader with any SWD programmer, e.g.
 ## Host tool
 
 `tools/linboot/linboot.py` updates devices through a [USB LIN Card](https://github.com/oko256/usb-lin-card-fw).
-It needs Python 3.10+ and the [usb-lin-card](https://github.com/oko256/py-usb-lin-card) library,
+It needs Python 3.10+ and the [usb-lin-card](https://github.com/oko256/py-usb-lin-card.git) library,
 which installs pyserial too:
 
 ```bash
