@@ -160,9 +160,7 @@ class Provider:
             else:
                 self.log(f"Update failed: {p.error_name(error)}")
 
-    def run(
-        self, timeout: float | None = None, until_done: bool = True, quiet_timeout: float = 2.0
-    ) -> int | None:
+    def run(self, timeout: float | None = None, until_done: bool = True, quiet_timeout: float = 2.0) -> int | None:
         """Serves until the bootloader reports a successful result (if until_done), or until timeout.
         Returns the last result (error code), or None if there was none.
 

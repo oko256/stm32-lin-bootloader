@@ -1,0 +1,6 @@
+# Ruff settings for the Python code: the host tool (tools/linboot) and the system tests (test_sys).
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]

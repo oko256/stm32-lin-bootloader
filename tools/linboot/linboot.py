@@ -184,7 +184,10 @@ def main(argv=None) -> int:
     sp.add_argument("--query-id", type=_int, default=0x31, help="QUERY frame ID (default: 0x31)")
     sp.add_argument("--data-id", type=_int, default=0x32, help="DATA frame ID (default: 0x32)")
     sp.add_argument(
-        "--offer-ids", type=_id_list, default=[0x33, 0x34, 0x35, 0x36], help="OFFER frame IDs (default: 0x33,0x34,0x35,0x36)"
+        "--offer-ids",
+        type=_id_list,
+        default=[0x33, 0x34, 0x35, 0x36],
+        help="OFFER frame IDs (default: 0x33,0x34,0x35,0x36)",
     )
     sp.add_argument("--timeout", type=float, help="give up after this many seconds")
     sp.add_argument("--forever", action="store_true", help="keep serving after a successful update")

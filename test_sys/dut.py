@@ -105,6 +105,8 @@ class Dut:
             time.sleep(0.05)
         if len(set(samples)) < 2:
             icsr, cfgr1 = self.swd.read32(SCB_ICSR, SYSCFG_CFGR1)
-            print(f"LED not toggling: samples {samples}, ICSR 0x{icsr:08X} (active exception {icsr & 0x3F}), SYSCFG_CFGR1 0x{cfgr1:08X}")
+            print(
+                f"LED not toggling: samples {samples}, ICSR 0x{icsr:08X} (active exception {icsr & 0x3F}), SYSCFG_CFGR1 0x{cfgr1:08X}"
+            )
             return False
         return True

@@ -115,9 +115,7 @@ def test_falls_back_to_other_provider_when_chosen_is_corrupt(dut, card, card2, f
     dut.install(firmware.blinky_slow, 0x0100)
     fallback = _Serving(card, firmware.blinky_fast, 0x0105, 0, log)
     corrupt = _Serving(card2, firmware.blinky_slow, 0x0107, 1, log)
-    corrupt.provider = _CorruptProvider(
-        CardResponderBus(card2), firmware.blinky_slow, 0x0107, index=1, log=log
-    )
+    corrupt.provider = _CorruptProvider(CardResponderBus(card2), firmware.blinky_slow, 0x0107, index=1, log=log)
     assert _serve_all(dut, [fallback, corrupt], timeout=60) is fallback
     assert corrupt.provider.result == p.Error.CRC
     _assert_installed(dut, firmware.blinky_fast, 0x0105)

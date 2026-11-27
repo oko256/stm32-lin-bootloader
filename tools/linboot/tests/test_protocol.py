@@ -37,7 +37,12 @@ def test_chunk_frames():
 
 def test_status_decode():
     idle = p.Status.decode(bytes([0x01, 0x34, 0x12, 0x03, 0x00, 0x02, 0x01, 0x11]))
-    assert (idle.state, idle.device_type, idle.hardware_version, idle.firmware_version) == (p.State.IDLE, 0x1234, 3, 0x0102)
+    assert (idle.state, idle.device_type, idle.hardware_version, idle.firmware_version) == (
+        p.State.IDLE,
+        0x1234,
+        3,
+        0x0102,
+    )
     assert idle.app_valid and idle.protocol_version == 1
     rx = p.Status.decode(bytes([0x10, 0x04, 0x85, 0x00, 0x00, 0x00, 0x01, 0x00]))
     assert (rx.state, rx.error, rx.next_offset, rx.window_end) == (p.State.RECEIVING, p.Error.BAD_STATE, 133, 256)
