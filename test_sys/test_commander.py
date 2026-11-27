@@ -56,7 +56,7 @@ def _serve(dut: Dut, provider: Provider, timeout: float = 60, reset: bool = True
 def test_looks_for_updates_without_application(dut, card, firmware):
     dut.erase_app()
     dut.reset()
-    card.cmd_ok("L")  # monitor
+    card.open_monitor()
     time.sleep(3)
     frames = card.frames()
     identifies = [f for f in frames if f.id == QUERY_ID]
@@ -181,7 +181,7 @@ def test_interrupted_transfer_recovers(dut, card, provider, firmware, big_image)
 
     with pytest.raises(Abort):
         _serve(dut, provider(big_image, 0x0200, progress=progress))
-    card.cmd_ok("w")  # the provider disappears
+    card.wipe()  # the provider disappears
 
     # The old application is gone: the bootloader keeps looking, also after a reset.
     time.sleep(3)

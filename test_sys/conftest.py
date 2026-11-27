@@ -99,11 +99,11 @@ def adapter_port(request) -> str:
 def _open_card(port: str, name: str):
     """Opens an adapter for one test. It starts and ends closed with empty tables, so that it doesn't
     answer anything by itself."""
-    card = UsbLinCard(port, name)
+    card = UsbLinCard(port, name=name)
 
     def clean():
-        card.cmd("C")
-        card.cmd_ok("w")
+        card.close_channel()
+        card.wipe()
         card.clear_frames()
         card.clear_replies()
 

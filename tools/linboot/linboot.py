@@ -17,7 +17,7 @@ import protocol as p
 from bus import CardCommanderBus, CardResponderBus
 from provider import CommanderIds, Provider
 from updater import Node, ResponderIds, UpdateError, Updater, update_nodes
-from usblincard import UsbLinCard
+from usblincard import UsbLinCard, UsbLinCardError
 
 
 def _int(text: str) -> int:
@@ -199,19 +199,24 @@ def main(argv=None) -> int:
     sp.set_defaults(func=cmd_status)
 
     args = parser.parse_args(argv)
-    card = UsbLinCard(args.port, "card")
     try:
-        return args.func(args, card)
-    except KeyboardInterrupt:
-        return 130
-    finally:
-        # Leave the card quiet: otherwise it keeps publishing our responses (e.g. the OFFER).
+        card = UsbLinCard(args.port, name="card")
+    except UsbLinCardError as e:
+        print(e, file=sys.stderr)
+        return 1
+    with card:
         try:
-            card.cmd("C", timeout=0.5)
-            card.cmd("w", timeout=0.5)
-        except TimeoutError:
-            pass
-        card.close()
+            return args.func(args, card)
+        except KeyboardInterrupt:
+            return 130
+        finally:
+            # Leave the card quiet: otherwise it keeps publishing our responses (e.g. the OFFER).
+            card.timeout = 0.5
+            try:
+                card.close_channel()
+                card.wipe()
+            except UsbLinCardError:
+                pass
 
 
 if __name__ == "__main__":

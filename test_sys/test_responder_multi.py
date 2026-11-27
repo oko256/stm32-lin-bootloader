@@ -161,12 +161,12 @@ def test_waiting_node_is_kept_in_its_bootloader(dut, bus, firmware, blinky_reboo
 
 def test_cli_update_nodes(dut, firmware, blinky_reboot, adapter_port, tmp_path):
     # The CLI opens the adapter itself: only open it here for finding out the second DUT's version.
-    card = UsbLinCard(adapter_port, "adapter")
+    card = UsbLinCard(adapter_port, name="adapter")
     try:
         status = _dut2_status(CardCommanderBus(card), 2 * DUT2_CYCLE_S)
     finally:
-        card.cmd("C")
-        card.cmd("w")
+        card.close_channel()
+        card.wipe()
         card.close()
     if status is None:
         pytest.skip("no second RESPONDER DUT (STATUS 0x20) on the bus")

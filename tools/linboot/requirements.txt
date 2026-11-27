@@ -1,0 +1,2 @@
+# The host tool's dependencies: pip install -r tools/linboot/requirements.txt
+usb-lin-card @ git+https://github.com/oko256/py-usb-lin-card.git@v1.0.0

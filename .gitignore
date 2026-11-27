@@ -75,3 +75,4 @@ Testing/
 
 # Python
 .pytest_cache/
+.venv/
