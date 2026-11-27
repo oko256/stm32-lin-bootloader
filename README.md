@@ -100,7 +100,15 @@ Flash the bootloader with any SWD programmer, e.g.
 ## Host tool
 
 `tools/linboot/linboot.py` updates devices through a [USB LIN Card](https://github.com/oko256/usb-lin-card-fw).
-It needs Python 3.10+ and pyserial. The frame IDs default to the defaults of the CMake options.
+It needs Python 3.10+ and the [usb-lin-card](https://github.com/oko256/py-usb-lin-card) library,
+which installs pyserial too:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r tools/linboot/requirements.txt
+```
+
+Then run the tool with `.venv/bin/python tools/linboot/linboot.py`. The frame IDs default to the
+defaults of the CMake options.
 
 ```bash
 # RESPONDER role: the PC is the commander. Start this, then reset the device.
@@ -413,6 +421,8 @@ slow providers, flash failures and timeouts.
 
 The ctest run also runs the host tool's tests (`tools/linboot/tests`, pytest). Part of them run the
 tool against the real role state machines, built as a shared library (`test/sim/linboot_sim.c`).
+They need pytest and the host tool's requirements in the Python that CMake finds; to use a venv,
+configure with `-DPython3_EXECUTABLE=$PWD/../.venv/bin/python`.
 
 ## Formatting and spelling
 
@@ -432,8 +442,9 @@ bus (with the bus supply):
   flash the bootloader on it (erasing everything), reset it, and check its state over SWD with
   STM32_Programmer_CLI: the metadata record, the application flash (read back), `SYSCFG_CFGR1`
   (`MEM_MODE` = 3 once the application runs), and the LED pin (blinky toggles it).
-- **The adapter:** a USB LIN Card, used through the host tool's modules (and its CLI in one test
-  per role). With card firmware 6 or later, `test_large_image` also checks the transfer speed.
+- **The adapter:** a USB LIN Card, used through the host tool's modules and the usb-lin-card
+  library (and the tool's CLI in one test per role). The tests need the host tool's requirements
+  (`tools/linboot/requirements.txt`) and pytest. With card firmware 6 or later, `test_large_image` also checks the transfer speed.
 
 The tests build the `usb-lin-card-{responder,commander}-release` presets themselves. If the DUT's
 option bytes don't boot from the flash, the tests set nBOOT0=1 and BOOT_SEL=0. Each test sets up its
