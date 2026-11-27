@@ -1,14 +1,16 @@
 """LIN bus access for the host tool.
 
 The update logic (updater.py, provider.py) only uses these interfaces, so that it can run on a USB
-LIN Card as well as against the simulated bootloader in the tests.
+LIN Card as well as against the simulated bootloader in the tests. The card is used through the
+usb-lin-card library (see requirements.txt).
 """
 
 import math
 import time
 from abc import ABC, abstractmethod
 
-from usblincard import BAUD_PRESETS, R0, T0, UsbLinCard, r1, t1, t2, t3
+from usblincard import Checksum, UsbLinCard
+from usblincard.protocol import RESPONSE_QUEUE_DEPTH, TABLE_SIZE
 
 
 class Clock:
@@ -84,13 +86,6 @@ class ResponderBus(Clock, ResponseQueue, ABC):
         None on timeout."""
 
 
-def _baud_command(baud: int) -> str:
-    for cmd, preset in BAUD_PRESETS.items():
-        if preset == baud:
-            return cmd
-    raise ValueError(f"the USB LIN Card doesn't support {baud} baud (only {sorted(BAUD_PRESETS.values())})")
-
-
 def stream_slots_ms(baud: int) -> tuple[int, int]:
     """Slots (ms) of the stream's frames and polls on the USB LIN Card.
 
@@ -106,31 +101,25 @@ def stream_slots_ms(baud: int) -> tuple[int, int]:
 
 
 class _CardBus:
-    """Common part of the buses on a USB LIN Card: opens the card, and uses its response queue
-    ("t2", "t3"), which card firmware 6 and later has."""
-
-    QUEUE_FIRMWARE_VERSION = 6
-    QUEUE_DEPTH = 16
+    """Common part of the buses on a USB LIN Card: opens the card's channel, and uses its response
+    queue ("t2", "t3"), which card firmware 6 and later has."""
 
     def __init__(self, card: UsbLinCard, baud: int = 19200, classic_checksum: bool = False):
         self.card = card
-        card.cmd("C")  # may fail if already closed
-        card.cmd_ok("w")
-        card.cmd_ok(_baud_command(baud))
-        card.cmd_ok("x2" if classic_checksum else "x1")
-        card.cmd_ok("O")
-        card.flags()  # clear old errors
-        if card.firmware_version() >= self.QUEUE_FIRMWARE_VERSION:
-            self.response_queue_depth = self.QUEUE_DEPTH
+        card.reset(baud, Checksum.CLASSIC if classic_checksum else Checksum.ENHANCED)
+        card.open_channel()
+        card.read_flags()  # clear old errors
+        if card.supports_response_queue:
+            self.response_queue_depth = RESPONSE_QUEUE_DEPTH
 
     def replace_response(self, lin_id: int, data: bytes) -> None:
-        self.card.cmd_ok(t2(lin_id, data))
+        self.card.replace_response(lin_id, data)
 
     def queue_response(self, lin_id: int, data: bytes) -> bool:
-        return self.card.cmd(t3(lin_id, data)).ok
+        return self.card.queue_response(lin_id, data)
 
     def receive(self, timeout: float) -> tuple[int, bytes] | None:
-        frame = self.card.pop_frame(timeout)
+        frame = self.card.receive(timeout)
         return None if frame is None else (frame.id, frame.data)
 
 
@@ -138,8 +127,8 @@ class CardCommanderBus(_CardBus, CommanderBus):
     """CommanderBus on a USB LIN Card.
 
     Frames are sent with single frames ("t0"). The card has no single header command, so a request
-    temporarily schedules the header ("R0"), which repeats every slot until the response arrives,
-    and is then wiped again. A stream is a schedule of command frames ("T0", whose response the
+    (UsbLinCard.request()) temporarily schedules the header ("R0"), which repeats every slot until
+    the response arrives, and is then wiped again. A stream is a schedule of command frames ("T0", whose response the
     response queue changes) and polled headers ("R0").
     """
 
@@ -148,8 +137,6 @@ class CardCommanderBus(_CardBus, CommanderBus):
     REQUEST_SLOT_MS = 20
     # Stream: the frames in the schedule before each round of polls.
     STREAM_FRAMES = 16
-    # The card's table size.
-    TABLE_SIZE = 32
 
     def __init__(self, card: UsbLinCard, baud: int = 19200, classic_checksum: bool = False):
         super().__init__(card, baud, classic_checksum)
@@ -159,33 +146,22 @@ class CardCommanderBus(_CardBus, CommanderBus):
         self.card.send_frame(lin_id, data)
 
     def request(self, lin_id: int, length: int, timeout: float) -> bytes | None:
-        self.card.clear_frames()
-        self.card.cmd_ok(R0(lin_id, self.REQUEST_SLOT_MS, length))
-        try:
-            deadline = time.monotonic() + timeout
-            while True:
-                frame = self.card.pop_frame(max(0.0, deadline - time.monotonic()))
-                if frame is None:
-                    return None
-                if frame.id == lin_id and len(frame.data) == length:
-                    return frame.data
-        finally:
-            self.card.cmd_ok("w")
+        return self.card.request(lin_id, length, timeout, slot_ms=self.REQUEST_SLOT_MS)
 
     def start_stream(self, lin_id: int, data: bytes, polls: dict[int, int]) -> None:
-        if self.STREAM_FRAMES + len(polls) > self.TABLE_SIZE:
-            raise ValueError(f"at most {self.TABLE_SIZE - self.STREAM_FRAMES} polls fit in the card's schedule")
+        if self.STREAM_FRAMES + len(polls) > TABLE_SIZE:
+            raise ValueError(f"at most {TABLE_SIZE - self.STREAM_FRAMES} polls fit in the card's schedule")
         # The card answers all the frames of lin_id with the response of the first one, which is
         # what the response queue changes.
-        self.card.cmd_ok("w")
+        self.card.wipe()
         self.card.clear_frames()
         for _ in range(self.STREAM_FRAMES):
-            self.card.cmd_ok(T0(lin_id, self.stream_frame_slot_ms, data))
+            self.card.schedule_frame(lin_id, data, self.stream_frame_slot_ms)
         for poll_id, length in polls.items():
-            self.card.cmd_ok(R0(poll_id, self.stream_poll_slot_ms, length))
+            self.card.schedule_header(poll_id, length, self.stream_poll_slot_ms)
 
     def stop_stream(self) -> None:
-        self.card.cmd_ok("w")
+        self.card.wipe()
 
 
 class CardResponderBus(_CardBus, ResponderBus):
@@ -194,8 +170,8 @@ class CardResponderBus(_CardBus, ResponderBus):
     a READ."""
 
     def configure(self, subscribe: dict[int, int], publish: dict[int, bytes]) -> None:
-        self.card.cmd_ok("w")
+        self.card.wipe()
         for lin_id, length in subscribe.items():
-            self.card.cmd_ok(r1(lin_id, length))
+            self.card.subscribe(lin_id, length)
         for lin_id, data in publish.items():
-            self.card.cmd_ok(t1(lin_id, data))
+            self.card.publish(lin_id, data)
