@@ -8,7 +8,7 @@ import math
 import time
 from abc import ABC, abstractmethod
 
-from usblincard import BAUD_PRESETS, UsbLinCard, R0, T0, r1, t1, t2, t3
+from usblincard import BAUD_PRESETS, R0, T0, UsbLinCard, r1, t1, t2, t3
 
 
 class Clock:

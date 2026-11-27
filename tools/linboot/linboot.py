@@ -101,7 +101,7 @@ def cmd_update_nodes(args, card: UsbLinCard) -> int:
     except UpdateError as e:
         print(f"Update failed: {e}", file=sys.stderr)
         return 1
-    for node, outcome in zip(args.node, outcomes):
+    for node, outcome in zip(args.node, outcomes, strict=True):
         console.log(f"STATUS 0x{node.ids.status:02X} Result: {outcome.value}")
     return 0
 
@@ -184,7 +184,10 @@ def main(argv=None) -> int:
     sp.add_argument("--query-id", type=_int, default=0x31, help="QUERY frame ID (default: 0x31)")
     sp.add_argument("--data-id", type=_int, default=0x32, help="DATA frame ID (default: 0x32)")
     sp.add_argument(
-        "--offer-ids", type=_id_list, default=[0x33, 0x34, 0x35, 0x36], help="OFFER frame IDs (default: 0x33,0x34,0x35,0x36)"
+        "--offer-ids",
+        type=_id_list,
+        default=[0x33, 0x34, 0x35, 0x36],
+        help="OFFER frame IDs (default: 0x33,0x34,0x35,0x36)",
     )
     sp.add_argument("--timeout", type=float, help="give up after this many seconds")
     sp.add_argument("--forever", action="store_true", help="keep serving after a successful update")

@@ -6,8 +6,8 @@ import protocol as p
 import pytest
 from bus import CardCommanderBus
 from provider import CommanderIds, Provider
-from updater import Outcome, UpdateError, Updater
 from sim import DEVICE_TYPE, HW_VERSION, OFFER_IDS, SimCommanderBus, SimResponderBus, load_lib
+from updater import Outcome, UpdateError, Updater
 
 LIB = load_lib()
 pytestmark = pytest.mark.skipif(LIB is None, reason="simulated bootloader not built (build the unit tests first)")

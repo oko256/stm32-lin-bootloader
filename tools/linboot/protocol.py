@@ -138,7 +138,9 @@ class Status:
                 f"{'' if self.app_valid else ' (no valid application)'}, protocol {self.protocol_version}"
             )
         if self.state in (State.RECEIVING, State.VERIFYING):
-            return f"{name}: next offset {self.next_offset}, window end {self.window_end}, error {error_name(self.error)}"
+            return (
+                f"{name}: next offset {self.next_offset}, window end {self.window_end}, error {error_name(self.error)}"
+            )
         return f"{name}: error {error_name(self.error)}, firmware {format_version(self.firmware_version)}"
 
 

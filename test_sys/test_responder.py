@@ -52,7 +52,10 @@ def test_status_without_application(dut, updater, firmware):
 def test_first_install(dut, updater, firmware):
     dut.erase_app()
     dut.reset()
-    assert updater.update(firmware.blinky_slow, 0x0100, device_type=DEVICE_TYPE, hardware_version=HW_VERSION) == Outcome.UPDATED
+    assert (
+        updater.update(firmware.blinky_slow, 0x0100, device_type=DEVICE_TYPE, hardware_version=HW_VERSION)
+        == Outcome.UPDATED
+    )
     _assert_installed(dut, firmware.blinky_slow, 0x0100)
 
 

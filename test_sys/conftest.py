@@ -145,7 +145,9 @@ def wait_until(condition, timeout: float, interval: float = 0.1) -> bool:
         time.sleep(interval)
 
 
-def run_tool(adapter: str, *args: str, reset_dut: Dut | None = None, timeout: float = 300) -> subprocess.CompletedProcess:
+def run_tool(
+    adapter: str, *args: str, reset_dut: Dut | None = None, timeout: float = 300
+) -> subprocess.CompletedProcess:
     """Runs tools/linboot/linboot.py; resets the DUT once the tool has started (if given)."""
     cmd = [sys.executable, str(REPO / "tools" / "linboot" / "linboot.py"), "-p", adapter, *args]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
