@@ -1,7 +1,7 @@
 """Provider: the host is a responder that provides the update for a COMMANDER role bootloader."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import protocol as p
 from bus import ResponderBus
@@ -34,12 +34,14 @@ class Provider:
         version: int,
         force: bool = False,
         index: int = 0,
-        ids: CommanderIds = CommanderIds(),
+        ids: CommanderIds | None = None,
         device_type: int | None = None,
         hardware_version: int | None = None,
         log: Callable[[str], None] = print,
         progress: Callable[[int, int], None] | None = None,
     ):
+        if ids is None:
+            ids = CommanderIds()
         if not 0 <= index < len(ids.offers):
             raise ValueError(f"provider index {index} out of range (0..{len(ids.offers) - 1})")
         self.bus = bus

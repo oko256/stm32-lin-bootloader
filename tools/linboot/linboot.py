@@ -101,7 +101,7 @@ def cmd_update_nodes(args, card: UsbLinCard) -> int:
     except UpdateError as e:
         print(f"Update failed: {e}", file=sys.stderr)
         return 1
-    for node, outcome in zip(args.node, outcomes):
+    for node, outcome in zip(args.node, outcomes, strict=True):
         console.log(f"STATUS 0x{node.ids.status:02X} Result: {outcome.value}")
     return 0
 

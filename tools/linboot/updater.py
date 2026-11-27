@@ -1,8 +1,8 @@
 """Updater: the host is the bus commander and updates a RESPONDER role bootloader."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
 
 import protocol as p
 from bus import CommanderBus
@@ -38,7 +38,7 @@ class Updater:
     def __init__(
         self,
         bus: CommanderBus,
-        ids: ResponderIds = ResponderIds(),
+        ids: ResponderIds | None = None,
         attempts: int = 3,
         status_timeout: float = 0.1,
         stall_timeout: float = 3.0,
@@ -51,7 +51,7 @@ class Updater:
         @p keep_alive_interval meanwhile, so that they stay in their bootloaders (waiting for their
         turn) instead of starting their applications after the session timeout."""
         self.bus = bus
-        self.ids = ids
+        self.ids = ids if ids is not None else ResponderIds()
         self.attempts = attempts
         self.status_timeout = status_timeout
         self.stall_timeout = stall_timeout
